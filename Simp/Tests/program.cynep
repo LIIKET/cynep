@@ -1,0 +1,18 @@
+﻿var x = 123;
+var y = 2;
+
+type player = {
+	positionx;
+	positiony;
+	complex;
+}
+
+var playerOne = alloc(player);
+
+playerOne.positiony = 321;
+playerOne.complex = alloc(player);
+
+x = playerOne.positiony;
+y = playerOne.complex;
+
+playerOne
