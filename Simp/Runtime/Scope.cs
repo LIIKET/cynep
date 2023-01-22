@@ -48,6 +48,8 @@ namespace Simp.Runtime
             return value;
         }
 
+
+
         public RuntimeValue GetVariable(string name)
         {
             var scope = ResolveScope(name);

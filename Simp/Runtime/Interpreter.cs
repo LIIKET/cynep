@@ -59,7 +59,7 @@ namespace Simp.Runtime
             }
         }
 
-        public Scope ResolveScopeForMemberExpression(MemberExpression statement, Scope scope)
+        public RuntimeValue ResolveForMemberExpression(MemberExpression statement, Scope scope, bool resolveContainer)
         {
             // TODO: Does it really have to be this complicated?
 
@@ -81,31 +81,47 @@ namespace Simp.Runtime
                 }
             }
 
-            var currentScope = scope;
+            memberKeys.Reverse();
 
-            for (int i = memberKeys.Count - 1; i >= 0; i--)
+            // First item is always variable
+            var prop = scope.GetVariable(memberKeys.First());
+
+            memberKeys.RemoveAt(0);
+
+            foreach (var memberKey in memberKeys)
             {
-                var value = currentScope.GetVariable(memberKeys[i]);
-
-                if (value.Type == ValueType.Object)
+                if (resolveContainer)
                 {
-                    currentScope = (value as ObjectValue).Scope;
+                    if ((prop as ObjectValue).Properties[memberKey].Type == ValueType.Object)
+                    {
+                        prop = (prop as ObjectValue).Properties[memberKey];
+                    }
+                }
+                else
+                {
+                    prop = (prop as ObjectValue).Properties[memberKey];
                 }
             }
 
-            return currentScope;
+            return prop;
         }
 
         public RuntimeValue EvaluateMemberExpression(MemberExpression statement, Scope scope)
         {
-            var memberScope = ResolveScopeForMemberExpression(statement, scope);
-            var val = Evaluate(statement.Property, memberScope);
+            var member = ResolveForMemberExpression(statement, scope, false);
 
-            return val;
+            return member;
         }
 
         public RuntimeValue EvaluateCallExpression(CallExpression statement, Scope scope)
         {
+            List<RuntimeValue> args = new List<RuntimeValue>();
+
+            foreach (var arg in statement.Args)
+            {
+                args.Add(Evaluate(arg, scope));
+            }
+
             // TODO: Fix! This is trash. Handle native functions properly
 
             var type = Evaluate(statement.Args[0], scope) as TypeValue;
@@ -113,7 +129,8 @@ namespace Simp.Runtime
 
             foreach (var prop in type.Properties)
             {
-                val.Scope.DeclareVariable(prop.Name, new NumberValue(12));
+                val.Properties.Add(prop.Name, new NumberValue(12));
+
             }
 
             return val;
@@ -139,10 +156,12 @@ namespace Simp.Runtime
             // Handles member expressions as assignee. Example: {obj}.{member} = {erpression}
             if (assignmentExpression.Assignee.Type == NodeType.MemberExpression)
             {
-                var memberScope = ResolveScopeForMemberExpression(assignmentExpression.Assignee as MemberExpression, scope);
+                var memberParent = ResolveForMemberExpression(assignmentExpression.Assignee as MemberExpression, scope, true) as ObjectValue;
                 var assigneeMember = (assignmentExpression.Assignee as MemberExpression).Property.Name;
 
-                return memberScope.AssignVariable(assigneeMember, value);
+                memberParent.Properties[assigneeMember] = value;
+
+                return value;
             }
 
             // Handle standard variable assignment

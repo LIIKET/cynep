@@ -16,7 +16,9 @@ namespace Simp
 
         Type,
         Object,
-        Property
+        Property,
+
+        NativeFunction
     }
     public class RuntimeValue
     {

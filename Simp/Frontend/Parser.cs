@@ -106,7 +106,7 @@ namespace Simp
         // MiltiplicativeExpression         [X]
         // UnaryExpression
         // FunctionCall                     [/]
-        // MemberExpression                 [/]
+        // MemberExpression                 [X]
         // PrimaryExpression                [X]
 
 
@@ -227,6 +227,7 @@ namespace Simp
 
             while (Current().Type == TokenType.Comma)
             {
+                Consume();
                 args.Add(ParseAssignmentExpression());
             }
 
@@ -287,7 +288,7 @@ namespace Simp
                     }
                 default:
                     {
-                        throw new Exception($"Unexpected token in parser: {Current().Value}");
+                        throw new Exception($"Unexpected token in parser: \"{Current().Value}\"");
                     }
             }
         }
