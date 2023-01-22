@@ -72,14 +72,14 @@ namespace Simp
     {
         public string Name;
         public List<PropertyDeclaration> Properties;
-        public Scope Scope;
 
-        public TypeValue(string name, List<PropertyDeclaration> properties, Scope scope)
+
+        public TypeValue(string name, List<PropertyDeclaration> properties)
         {
             Type = ValueType.Type;
             Name= name;
             Properties = properties;
-            Scope = scope;
+
         }
     }
 

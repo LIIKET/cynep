@@ -28,7 +28,7 @@ else
 
     var syntaxTree = parser.BuildSyntaxTree(tokens);
 
-    //Console.WriteLine(JsonConvert.SerializeObject(syntaxTree, Formatting.Indented, new JsonConverter[] { new StringEnumConverter() }));
+    Console.WriteLine(JsonConvert.SerializeObject(syntaxTree, Formatting.Indented, new JsonConverter[] { new StringEnumConverter() }));
 
     var result = interpreter.Evaluate(syntaxTree, scope);
 

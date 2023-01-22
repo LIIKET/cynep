@@ -1,4 +1,6 @@
-﻿namespace Simp.Runtime
+﻿using System.Linq.Expressions;
+
+namespace Simp.Runtime
 {
     public class Interpreter
     {
@@ -57,11 +59,47 @@
             }
         }
 
+        public Scope ResolveScopeForMemberExpression(MemberExpression statement, Scope scope)
+        {
+            // TODO: Does it really have to be this complicated?
+
+            var currentExpression = statement;
+            var memberKeys = new List<string>();
+
+            while (currentExpression.Type != NodeType.Identifier)
+            {
+                memberKeys.Add(currentExpression.Property.Name);
+
+                if (currentExpression.Object.Type != NodeType.Identifier)
+                {
+                    currentExpression = currentExpression.Object as MemberExpression;
+                }
+                else
+                {
+                    memberKeys.Add((currentExpression.Object as Identifier).Name);
+                    break;
+                }
+            }
+
+            var currentScope = scope;
+
+            for (int i = memberKeys.Count - 1; i >= 0; i--)
+            {
+                var value = currentScope.GetVariable(memberKeys[i]);
+
+                if (value.Type == ValueType.Object)
+                {
+                    currentScope = (value as ObjectValue).Scope;
+                }
+            }
+
+            return currentScope;
+        }
+
         public RuntimeValue EvaluateMemberExpression(MemberExpression statement, Scope scope)
         {
-            // TODO: Det här stämmer nog inte
-            var obj = scope.GetVariable((statement.Object as Identifier).Name) as ObjectValue;
-            var val= Evaluate((statement.Property), obj.Scope);
+            var memberScope = ResolveScopeForMemberExpression(statement, scope);
+            var val = Evaluate(statement.Property, memberScope);
 
             return val;
         }
@@ -75,7 +113,7 @@
 
             foreach (var prop in type.Properties)
             {
-                val.Scope.DeclareVariable(prop.Name, new NumberValue(1));
+                val.Scope.DeclareVariable(prop.Name, new NumberValue(12));
             }
 
             return val;
@@ -83,7 +121,7 @@
 
         public RuntimeValue EvaluateTypeDeclaration(TypeDeclaration declaration, Scope scope)
         {
-            var type = new TypeValue(declaration.Name, declaration.Properties, scope);
+            var type = new TypeValue(declaration.Name, declaration.Properties);
 
             return scope.DeclareVariable(declaration.Name, type);
         }
@@ -96,20 +134,20 @@
 
         public RuntimeValue EvaluateVariableAssignment(AssignmentExpression assignmentExpression, Scope scope)
         {
-            // Handles member expressions as assignee. Example: {obj}.{member} = {erpression}
-            // TODO: Clean this shit up
-            if(assignmentExpression.Assignee.Type == NodeType.MemberExpression)
-            {
-                var obj = scope.GetVariable(((assignmentExpression.Assignee as MemberExpression).Object as Identifier).Name) as ObjectValue;
-                var prop = ((assignmentExpression.Assignee as MemberExpression).Property as Identifier);
+            var value = assignmentExpression.Value == null ? new NullValue() : Evaluate(assignmentExpression.Value, scope);
 
-                var name2 = prop.Name;
-                var value2 = assignmentExpression.Value == null ? new NullValue() : Evaluate(assignmentExpression.Value, scope);
-                return obj.Scope.AssignVariable(name2, value2);
+            // Handles member expressions as assignee. Example: {obj}.{member} = {erpression}
+            if (assignmentExpression.Assignee.Type == NodeType.MemberExpression)
+            {
+                var memberScope = ResolveScopeForMemberExpression(assignmentExpression.Assignee as MemberExpression, scope);
+                var assigneeMember = (assignmentExpression.Assignee as MemberExpression).Property.Name;
+
+                return memberScope.AssignVariable(assigneeMember, value);
             }
 
+            // Handle standard variable assignment
             var name = (assignmentExpression.Assignee as Identifier)!.Name;
-            var value = assignmentExpression.Value == null ? new NullValue() : Evaluate(assignmentExpression.Value, scope);
+            
             return scope.AssignVariable(name, value);
         }
 

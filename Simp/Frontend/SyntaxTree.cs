@@ -97,9 +97,9 @@ namespace Simp
     public class MemberExpression : Expression
     {
         public Expression Object;
-        public Expression Property;
+        public Identifier Property;
 
-        public MemberExpression(Expression @object, Expression property)
+        public MemberExpression(Expression @object, Identifier property)
         {
             Object = @object;
             Property = property;

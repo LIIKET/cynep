@@ -247,7 +247,7 @@ namespace Simp
                     throw new Exception("Dot operator requires identifier on right hand");
                 }
 
-                obj = new MemberExpression(obj, property);
+                obj = new MemberExpression(obj, property as Identifier);
             }
 
             return obj;

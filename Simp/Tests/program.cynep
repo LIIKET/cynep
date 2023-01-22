@@ -1,18 +1,29 @@
-﻿var x = 123;
-var y = 2;
+﻿var x = 123 + 456 * 2;
+var y = 321;
+
+type animal = {
+	name;
+	sounds;
+}
+
+type sounds = {
+	angry;
+}
 
 type player = {
 	positionx;
 	positiony;
-	complex;
+	pet;
 }
 
 var playerOne = alloc(player);
+playerOne.pet = alloc(animal);
+playerOne.pet.sounds = alloc(sounds);
 
-playerOne.positiony = 321;
-playerOne.complex = alloc(player);
 
-x = playerOne.positiony;
-y = playerOne.complex;
+playerOne.pet.name = 5 * 10 + y;
+playerOne.pet.sounds = 10;
 
-playerOne
+
+
+playerOne.pet.sounds
