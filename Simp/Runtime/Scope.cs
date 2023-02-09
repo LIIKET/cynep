@@ -24,6 +24,7 @@ namespace Simp.Runtime
             {
                 DeclareVariable("true", new BooleanValue(true));
                 DeclareVariable("false", new BooleanValue(false));
+                DeclareVariable("null", new NullValue());
             }
         }
 
@@ -44,6 +45,7 @@ namespace Simp.Runtime
         public RuntimeValue AssignVariable(string name, RuntimeValue value)
         {
             var scope = ResolveScope(name);
+
             scope.Variables[name] = value;
             return value;
         }

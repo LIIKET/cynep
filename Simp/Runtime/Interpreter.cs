@@ -14,10 +14,10 @@ namespace Simp.Runtime
                     {
                         return new NumberValue(((NumericLiteral)statement).Value);
                     }
-                case NodeType.NullLiteral:
-                    {
-                        return new NullValue();
-                    }
+                //case NodeType.NullLiteral:
+                //    {
+                //        return new NullValue();
+                //    }
                 case NodeType.Program:
                     {
                         return EvaluateProgram((Program)statement, scope);

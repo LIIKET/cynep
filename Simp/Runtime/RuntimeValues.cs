@@ -75,13 +75,11 @@ namespace Simp
         public string Name;
         public List<PropertyDeclaration> Properties;
 
-
         public TypeValue(string name, List<PropertyDeclaration> properties)
         {
             Type = ValueType.Type;
             Name= name;
             Properties = properties;
-
         }
     }
 

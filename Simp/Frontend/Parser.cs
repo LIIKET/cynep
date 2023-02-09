@@ -273,11 +273,11 @@ namespace Simp
                     {
                         return new NumericLiteral(long.Parse(Consume().Value));
                     }
-                case TokenType.Null:
-                    {
-                        Consume();
-                        return new NullLiteral();
-                    }
+                //case TokenType.Null:
+                //    {
+                //        Consume();
+                //        return new NullLiteral();
+                //    }
                 case TokenType.OpenParen:
                     {
                         Consume(); // Throw away open paren

@@ -55,7 +55,7 @@ namespace Simp
         {
             {"type", TokenType.Type},
             {"var", TokenType.Let},
-            {"null", TokenType.Null},
+            //{"null", TokenType.Null},
         };
 
         private bool IsLetter(char src)
@@ -68,10 +68,6 @@ namespace Simp
             return char.IsDigit(src);
         }
 
-        private bool IsSpecial(char src)
-        {
-            return !char.IsLetterOrDigit(src) && !IsSkippable(src);
-        }
         private bool IsSkippable(char src)
         {
             return src == ' ' || src == '\n' || src == '\t' || src == '\r';
@@ -131,7 +127,7 @@ namespace Simp
                         {
                             tokens.Add(new Token(TokenType.Dot, characters.Pop().ToString()));
                             break;
-                        }
+                        }//
                     case '!':
                         {
                             characters.Pop();

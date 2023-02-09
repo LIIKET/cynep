@@ -1,5 +1,9 @@
-﻿var x = 123 + 456 * 2;
-var y = 321;
+﻿var y = 321;
+var z = y;
+var x = 123 + 456 * 2;
+
+z = y;
+y = 5;
 
 type animal = {
 	name;
@@ -24,4 +28,6 @@ playerOne.pet.properties = alloc(animalproperties);
 playerOne.pet.name = 5 * 10 + y;
 playerOne.pet.properties.speed = 200;
 
-playerOne.pet.properties.speed
+var f = null;
+
+z

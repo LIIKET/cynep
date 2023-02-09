@@ -25,7 +25,7 @@ namespace Simp
 
         // Literals
         NumericLiteral,
-        NullLiteral,
+        //NullLiteral,
 
         Identifier,
     }
@@ -58,7 +58,7 @@ namespace Simp
         }
     }
 
-    public class TypeDeclaration : Statement
+    public class TypeDeclaration : Statement //
     {
         public string Name;
         public List<PropertyDeclaration> Properties = new List<PropertyDeclaration>();
@@ -70,7 +70,7 @@ namespace Simp
         }
     }
 
-    public class PropertyDeclaration : Statement
+    public class PropertyDeclaration : Statement //
     {
         public string Name;
 
@@ -81,7 +81,7 @@ namespace Simp
         }
     }
 
-    public class CallExpression : Expression
+    public class CallExpression : Expression //
     {
         public Expression Callee;
         public List<Expression> Args;
@@ -177,14 +177,14 @@ namespace Simp
         }
     }
 
-    public class NullLiteral : Expression
-    {
-        public string Value;
+    //public class NullLiteral : Expression
+    //{
+    //    public string Value;
 
-        public NullLiteral()
-        {
-            Value = "null";
-            Type = NodeType.NullLiteral;
-        }
-    }
+    //    public NullLiteral()
+    //    {
+    //        Value = "null";
+    //        Type = NodeType.NullLiteral;
+    //    }
+    //}
 }
