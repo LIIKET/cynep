@@ -1,0 +1,3 @@
+var myVarY = 7331;
+var myVarX = 7331;
+var myVarZ = 7331 + 5 * 10;
