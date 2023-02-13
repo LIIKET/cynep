@@ -9,7 +9,6 @@
 #include "helper/diagnostics.c"
 #include "helper/list.c"
 #include "helper/file.c"
-#include "helper/array.c"
 #include "helper/smart_array.c"
 
 #include "frontend/lexer.c"
@@ -66,12 +65,12 @@ void PrettyPrint(Statement* node, char* indent, bool isLast){
 int main(int argc, char**argv) {
     int64 t1 = timestamp();
 
-    char* file = file_read_text("input.cynep");
+    SourceFile* file = File_Read_Text("input.cynep");
 
     Token* tokens = lexer_tokenize(file);
     Statement* program = Build_SyntaxTree(tokens);
 
-    if (argc > 1 && strcmp(argv[1], "-tree") == 0) { //|| true
+    if (argc > 1 && strcmp(argv[1], "-tree") == 0 || true) { //|| true
         PrettyPrint((Statement*)program, "", true);
     }
 

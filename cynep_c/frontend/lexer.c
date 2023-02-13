@@ -1,7 +1,7 @@
 #pragma once
 
-typedef enum   TokenType  TokenType;
-typedef struct Token      Token; 
+typedef enum TokenType TokenType;
+typedef struct Token Token; 
 typedef struct BufferString BufferString; 
 
 enum TokenType 
@@ -39,36 +39,43 @@ struct BufferString {
 struct Token 
 {
     TokenType type;
-    BufferString token_str;
-    char operator[2];
+    union
+    {
+        BufferString string_value;
+        char operator_value[2];
+        float64 number_value;
+    };
 };
 
-
-
-void create_token(Token* token, TokenType type, char* start, size_t length) 
+void Token_Create(Token* token, TokenType type, char* start, size_t length) 
 {
     token->type = type;
-    token->token_str.length = length;
-    token->token_str.start = start;
+    token->string_value.length = length;
+    token->string_value.start = start;
 }
 
-void create_token_operator(Token* token, TokenType type, char operator[2]) 
+void Token_Number_Create(Token* token, TokenType type, float64 value) 
 {
     token->type = type;
-    token->token_str.length = NULL;
-    token->token_str.start = NULL;
-    strcpy(token->operator, operator);
+    token->number_value = value;
 }
 
-bool is_skippable(char c) 
+void Token_Operator_Create(Token* token, TokenType type, char operator[2]) 
+{
+    token->type = type;
+    token->string_value.length = 0;
+    token->string_value.start = NULL;
+    strcpy(token->operator_value, operator);
+}
+
+bool Is_Skippable(char c) 
 {
     return c == -85 || c == '\n' || c == '\t' || c == '\r' || isspace(c);
 }
 
-Token* lexer_tokenize(char* str)
+Token* lexer_tokenize(SourceFile* file)
 {
-    size_t iterator = 0;
-
+    char* file_buffer = file->buffer;
     int64 t1 = timestamp();
 
     // TODO: Should predict a good size based on characters in document
@@ -77,24 +84,20 @@ Token* lexer_tokenize(char* str)
     size_t tokens_max = 10000000; 
     size_t tokens_count = 0;
 
-    // size_t strings_cursor = 0;
+    size_t iterator = 0;
 
     Token* tokens = (Token*)malloc(sizeof(Token) * tokens_max);
-    // char* strings = (char*)malloc(sizeof(char) * tokens_max);
 
-    char* current;
-    char* lookahead;
-    char current_as_string[2];
-    char current_and_lookahead_as_string[3];
-
-    while(str[iterator] != NULL_CHAR)
+    while(file_buffer[iterator] != NULL_CHAR)
     {
-        current = &str[iterator];
-        lookahead = &str[iterator + 1];
+        char* current = &file_buffer[iterator];
+        char* lookahead = &file_buffer[iterator + 1];
 
+        char current_as_string[2];
         current_as_string[0] = *current;
         current_as_string[1] = NULL_CHAR;
 
+        char current_and_lookahead_as_string[3];
         current_and_lookahead_as_string[0] = *current;
         current_and_lookahead_as_string[1] = *lookahead;
         current_and_lookahead_as_string[2] = NULL_CHAR;
@@ -107,49 +110,49 @@ Token* lexer_tokenize(char* str)
             case '/':
             case '%':
             {
-                create_token_operator(&tokens[tokens_count++], Token_BinaryOperator, current_as_string);  
+                Token_Operator_Create(&tokens[tokens_count++], Token_BinaryOperator, current_as_string);  
                 break;
             }    
             case '(':
             {
-                create_token_operator(&tokens[tokens_count++], Token_OpenParen, current_as_string);  
+                Token_Operator_Create(&tokens[tokens_count++], Token_OpenParen, current_as_string);  
                 break;
             }
             case ')':
             {
-                create_token_operator(&tokens[tokens_count++], Token_CloseParen, current_as_string);  
+                Token_Operator_Create(&tokens[tokens_count++], Token_CloseParen, current_as_string);  
                 break;
             }   
             case '{':
             {
-                create_token_operator(&tokens[tokens_count++], Token_OpenBrace, current_as_string);  
+                Token_Operator_Create(&tokens[tokens_count++], Token_OpenBrace, current_as_string);  
                 break;
             }
             case '}':
             {
-                create_token_operator(&tokens[tokens_count++], Token_CloseBrace, current_as_string);  
+                Token_Operator_Create(&tokens[tokens_count++], Token_CloseBrace, current_as_string);  
                 break;
             }
             case ',':
             {
-                create_token_operator(&tokens[tokens_count++], Token_Comma, current_as_string);  
+                Token_Operator_Create(&tokens[tokens_count++], Token_Comma, current_as_string);  
                 break;
             }
             case ';':
             {
-                create_token_operator(&tokens[tokens_count++], Token_Semicolon, current_as_string);  
+                Token_Operator_Create(&tokens[tokens_count++], Token_Semicolon, current_as_string);  
                 break;
             }
             case '.':
             {
-                create_token_operator(&tokens[tokens_count++], Token_Dot, current_as_string);  
+                Token_Operator_Create(&tokens[tokens_count++], Token_Dot, current_as_string);  
                 break;
             }
             case '!':
             {   
                 if(*lookahead == '=')
                 {
-                    create_token_operator(&tokens[tokens_count++], Token_ComparisonOperator, current_and_lookahead_as_string);  
+                    Token_Operator_Create(&tokens[tokens_count++], Token_ComparisonOperator, current_and_lookahead_as_string);  
                     iterator++;
                 }
                 else{
@@ -162,11 +165,11 @@ Token* lexer_tokenize(char* str)
             {   
                 if(*lookahead == '=')
                 {
-                    create_token_operator(&tokens[tokens_count++], Token_ComparisonOperator, current_and_lookahead_as_string);  
+                    Token_Operator_Create(&tokens[tokens_count++], Token_ComparisonOperator, current_and_lookahead_as_string);  
                     iterator++;
                 }
                 else{
-                    create_token_operator(&tokens[tokens_count++], Token_ComparisonOperator, current_as_string); 
+                    Token_Operator_Create(&tokens[tokens_count++], Token_ComparisonOperator, current_as_string); 
                 }
                 
                 break;
@@ -175,11 +178,11 @@ Token* lexer_tokenize(char* str)
             {   
                 if(*lookahead == '=')
                 {
-                    create_token_operator(&tokens[tokens_count++], Token_ComparisonOperator, current_and_lookahead_as_string);  
+                    Token_Operator_Create(&tokens[tokens_count++], Token_ComparisonOperator, current_and_lookahead_as_string);  
                     iterator++;
                 }
                 else{
-                    create_token_operator(&tokens[tokens_count++], Token_ComparisonOperator, current_as_string); 
+                    Token_Operator_Create(&tokens[tokens_count++], Token_ComparisonOperator, current_as_string); 
                 }
                 
                 break;
@@ -188,11 +191,11 @@ Token* lexer_tokenize(char* str)
             {   
                 if(*lookahead == '=')
                 {
-                    create_token_operator(&tokens[tokens_count++], Token_ComparisonOperator, current_and_lookahead_as_string);  
+                    Token_Operator_Create(&tokens[tokens_count++], Token_ComparisonOperator, current_and_lookahead_as_string);  
                     iterator++;
                 }
                 else{
-                    create_token_operator(&tokens[tokens_count++], Token_Assignment, current_as_string); 
+                    Token_Operator_Create(&tokens[tokens_count++], Token_Assignment, current_as_string); 
                 }
                 
                 break;
@@ -204,48 +207,42 @@ Token* lexer_tokenize(char* str)
                 if (isdigit(*current))
                 {
                     // Create number token
-                    //char number[50] = "";
+                    char number[50] = "";
                     size_t start_pos = iterator;
                     size_t length = 0;
-                    while (isdigit(str[start_pos + length]))
+                    while (isdigit(file_buffer[start_pos + length]))
                     {
-                        //strncat(number, &str[iterator], 1);
+                        strncat(number, &file_buffer[start_pos + length], 1);
                         length++;
                     }
                     iterator += length - 1;
-                    
 
-                    create_token(&tokens[tokens_count++], Token_Number, current, length); 
+                    float64 parsed_number = atoi(number); // atof for float. Slow as fuck. Just parse int and cast to float?
+
+                    Token_Number_Create(&tokens[tokens_count++], Token_Number, parsed_number); 
                 }
                 else if (isalpha(*current))
                 {
-                    //char identifier[50] = "";
-
                     size_t start_pos = iterator;
                     size_t length = 0;
-                    while (isalpha(str[start_pos + length]))
-                    {
-                        //strncat(identifier, &str[start_pos + length], 1);
-                        length++;
-                    }
-                    iterator += length - 1;
+                    for (; isalpha(file_buffer[start_pos + length]); length++) {} // Count the length of the identifier
+                    iterator += length - 1; // Reduce by one cause we also increment at the end of loop
 
                     // Check for reserved keywords
-                    // strncmp(identifier, var, length); 
                     if(strncmp(current, "type", length) == 0)
                     {
-                        create_token(&tokens[tokens_count++], Token_Type, current, length); 
+                        Token_Create(&tokens[tokens_count++], Token_Type, current, length); 
                     }
                     else if(strncmp(current, "var", length) == 0)
                     {
-                        create_token(&tokens[tokens_count++], Token_Let, current, length); 
+                        Token_Create(&tokens[tokens_count++], Token_Let, current, length); 
                     }
                     else
                     {
-                        create_token(&tokens[tokens_count++], Token_Identifier, current, length); 
+                        Token_Create(&tokens[tokens_count++], Token_Identifier, current, length); 
                     }
                 }
-                else if (is_skippable(*current))
+                else if (Is_Skippable(*current))
                 {
                     break;
                 }
@@ -266,7 +263,7 @@ Token* lexer_tokenize(char* str)
         iterator++;
     }  
 
-    create_token(&tokens[tokens_count++], Token_EOF, NULL, 0);  
+    Token_Create(&tokens[tokens_count++], Token_EOF, NULL, 0);  
 
     // for (size_t i = 0; i < tokens_count; i++)
     // {

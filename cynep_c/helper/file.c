@@ -1,6 +1,14 @@
 #pragma once
 
-char* file_read_text(char* filename)
+typedef struct SourceFile SourceFile;
+
+struct SourceFile{
+    size_t length;
+    char* buffer;
+    char* path;
+};
+
+SourceFile* File_Read_Text(char* filename)
 {
     int64 t1 = timestamp();
 
@@ -13,7 +21,7 @@ char* file_read_text(char* filename)
     FILE *file = NULL;
     size_t read_bytes = 0;
 
-    file = fopen("input.cynep", "r");
+    file = fopen(filename, "r");
 
     if (file == NULL){
         // TODO: Handle failed to open file
@@ -36,7 +44,12 @@ char* file_read_text(char* filename)
     fclose(file);
     free(buffer);
 
-    size_t result_length = result_bytes / sizeof(char);
+    SourceFile* return_file = malloc(sizeof(SourceFile));
+    return_file->buffer = result;
+    return_file->path = filename;
+    return_file->length = result_bytes / sizeof(char);
+
+    // size_t result_length = result_bytes / sizeof(char);
 
     //size_t test = getSize(result);
     // for (size_t i = 0; i < result_length; i++)
@@ -52,7 +65,7 @@ char* file_read_text(char* filename)
 
     printf("File read: %d ms\n", t2/1000-t1/1000);
 
-    return result;
+    return return_file;
 }
 
 

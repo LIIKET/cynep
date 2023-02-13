@@ -95,7 +95,7 @@ Statement* Build_SyntaxTree(Token* tokens)
     nodes = (Statement*)malloc(sizeof(Statement) * nodes_max);
     list_nodes = (SSNode*)malloc(sizeof(SSNode) * list_nodes_max);
 
-    Statement* program = Create_Program();
+    Statement* program = Create_Program(Seed_Memory(), (SSList*)Seed_SSNode_Memory());
 
     while(!End_Of_File()){
 
@@ -140,13 +140,13 @@ VariableDeclaration* Parse_VariableDeclaration()
 
     if(Current().type == Token_Semicolon){
         Consume();
-        return Create_VariableDeclaration((Statement*)Seed_Memory(), identifier.token_str, NULL);
+        return Create_VariableDeclaration((Statement*)Seed_Memory(), identifier.string_value, NULL);
     }
     else{
         ConsumeExpect(Token_Assignment, "Identifier in var declaration should be followed by an equals token.");
         Expression* expression = Parse_Expression();
         ConsumeExpect(Token_Semicolon, "Variable declaration must end with semicolon.");
-        return Create_VariableDeclaration((Statement*)Seed_Memory(), identifier.token_str, expression);
+        return Create_VariableDeclaration((Statement*)Seed_Memory(), identifier.string_value, expression);
     }
 }
 
@@ -157,15 +157,15 @@ TypeDeclaration* Parse_TypeDeclaration()
     ConsumeExpect(Token_Assignment, "Error in type declaration");
     ConsumeExpect(Token_OpenBrace, "Error in type declaration");
 
-    TypeDeclaration* type_declaration = Create_TypeDeclaration(Seed_Memory(), identifier.token_str);
+    TypeDeclaration* type_declaration = Create_TypeDeclaration(Seed_Memory(), (SSList*)Seed_SSNode_Memory() ,identifier.string_value);
 
     while(!End_Of_File() && Current().type != Token_CloseBrace){
         Token property_identifier = ConsumeExpect(Token_Identifier, "Error in type declaration");
         ConsumeExpect(Token_Semicolon, "Error in type declaration");
-        PropertyDeclaration* property_declaration = Create_PropertyDeclaration(Seed_Memory(), property_identifier.token_str);
+        PropertyDeclaration* property_declaration = Create_PropertyDeclaration(Seed_Memory(), property_identifier.string_value);
 
-        type_declaration->properties[type_declaration->properties_count] = property_declaration;
-        type_declaration->properties_count++;
+        SSNode* node = SSNode_Create(Seed_SSNode_Memory(),property_declaration);
+        SSList_Append(type_declaration->properties, node);
     }
 
     ConsumeExpect(Token_CloseBrace, "Error in type declaration");
@@ -211,14 +211,14 @@ Expression* Parse_ComparisonExpression()
 {
     Expression* left = Parse_AdditiveExpression();
 
-    while (0 == strcmp(Current().operator, "==")
-    || 0 == strcmp(Current().operator,"!=")  
-    || 0 == strcmp(Current().operator,">" )
-    || 0 == strcmp(Current().operator,">=") 
-    || 0 == strcmp(Current().operator,"<" )
-    || 0 == strcmp(Current().operator,"<="))
+    while (0 == strcmp(Current().operator_value, "==")
+        || 0 == strcmp(Current().operator_value,"!=")  
+        || 0 == strcmp(Current().operator_value,">" )
+        || 0 == strcmp(Current().operator_value,">=") 
+        || 0 == strcmp(Current().operator_value,"<" )
+        || 0 == strcmp(Current().operator_value,"<="))
     {
-        char* operator = Consume().operator;
+        char* operator = Consume().operator_value;
         Expression* right = Parse_AdditiveExpression();
         left = (Expression*)Create_ComparisonExpression(Seed_Memory(), left, operator, right);
 
@@ -232,9 +232,9 @@ Expression* Parse_AdditiveExpression()
 {
     Expression* left = Parse_MultiplicativeExpression();
 
-    while (0 == strcmp(Current().operator,"+") || 0 == strcmp(Current().operator,"-"))
+    while (0 == strcmp(Current().operator_value,"+") || 0 == strcmp(Current().operator_value,"-"))
     {
-        char* operator = Consume().operator;
+        char* operator = Consume().operator_value;
         Expression* right = Parse_MultiplicativeExpression();
         left = (Expression*)Create_BinaryExpression(Seed_Memory(), left, operator, right);
 
@@ -248,11 +248,11 @@ Expression* Parse_MultiplicativeExpression()
 {
     Expression* left = Parse_PrimaryExpression();
 
-    while (0 == strcmp(Current().operator,"*") 
-    || 0 == strcmp(Current().operator,"/") 
-    || 0 == strcmp(Current().operator,"%"))
+    while (0 == strcmp(Current().operator_value,"*") 
+        || 0 == strcmp(Current().operator_value,"/") 
+        || 0 == strcmp(Current().operator_value,"%"))
     {
-        char* operator = Consume().operator;
+        char* operator = Consume().operator_value;
         Expression* right = Parse_PrimaryExpression();
         left = (Expression*)Create_BinaryExpression(Seed_Memory(), left, operator, right);
     }
@@ -267,12 +267,11 @@ Expression* Parse_PrimaryExpression()
     switch (token.type) { 
         case Token_Identifier:
             {
-                return (Expression*)Create_Identifier(Seed_Memory(), Consume().token_str);
+                return (Expression*)Create_Identifier(Seed_Memory(), Consume().string_value);
             }
         case Token_Number:
             {
-                Consume();
-                return (Expression*)Create_NumericLiteral(Seed_Memory(), 123); //atoi(Consume().value)
+                return (Expression*)Create_NumericLiteral(Seed_Memory(), Consume().number_value); //atoi(Consume().value)
             }
         case Token_OpenParen:
             {

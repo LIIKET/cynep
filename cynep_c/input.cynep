@@ -1,3 +1,17 @@
-var myVarY = 7331;
-var myVarX = 7331;
-var myVarZ = 7331 + 5 * 10;
+type CoolBoi = {
+    hat;
+    girlfriend;
+    asshole;
+}
+
+type MotherPuncher = {
+    song;
+    mastodon;
+}
+
+var y = 321;
+var asd = 123;
+var y = 321 * 10 + 5;
+
+asd = 15;
+y = asd;
