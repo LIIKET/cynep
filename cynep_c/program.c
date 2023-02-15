@@ -1,3 +1,4 @@
+#include <pthread.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -15,65 +16,45 @@
 #include "frontend/ast.c"
 #include "frontend/parser.c"
 
-void PrettyPrint(Statement* node, char* indent, bool isLast){
-    char* marker;
-    
-    if(isLast)
-        marker = "└───";
-    else
-        marker = "├───";
+#include "backend/vm.c"
+#include "backend/compiler.c"
 
-    SSList* children = Get_Children(node);
-
-    printf("%s", indent);
-    printf("%s", marker);
-    Print_Node(node);
-    printf("\n");
-
-    char *new_indent = (char*)malloc(strlen(indent) + 8);
-    strcpy(new_indent, indent);
-
-    if(isLast)
-    {
-        strcat(new_indent, "    ");     
-
-        // if(children->first != NULL){
-        //     printf("%s│\n", new_indent);
-        // }
-    }
-    else
-        strcat(new_indent, "│   ");
-
-    Statement* lastChild;
-
-    if(children->first == NULL)
-        lastChild = NULL;
-    else
-        lastChild = (Statement*)children->last->value;
-    
-    SSNode* cursor = children->first;
-    while(cursor != NULL){
-        PrettyPrint(cursor->value, new_indent, cursor->next == NULL);
-        cursor = cursor->next;
-    }
-
-    // Cleanup
-    SSList_Free(children);
-    free(new_indent);
+void *parseTask(void *vargp)
+{
+    SourceFile* file = File_Read_Text((char*)vargp);
+    Token* tokens = lexer_tokenize(file);
 }
 
 int main(int argc, char**argv) {
     int64 t1 = timestamp();
 
-    SourceFile* file = File_Read_Text("input.cynep");
+    // pthread_t thread1;
+    // pthread_create(&thread1, NULL, myThreadFun, (void *)"input.cynep");
+    // pthread_join(thread1, NULL);
 
+    SourceFile* file = File_Read_Text("input.cynep");
     Token* tokens = lexer_tokenize(file);
     Statement* program = Build_SyntaxTree(tokens);
 
-    if (argc > 1 && strcmp(argv[1], "-tree") == 0 || true) { //|| true
-        PrettyPrint((Statement*)program, "", true);
-    }
+    int64 te1 = timestamp();
+    VM virtualMachine;
+    CodeObject codeObject = Compile((Statement*)program->program.body->first->value);
+    int64 te2 = timestamp();
+    printf("Compiling: %d ms\n", te2/1000-te1/1000);
+
 
     int64 t2 = timestamp();
     printf("Total: %d ms\n", t2/1000-t1/1000);
+    printf("\n");
+    
+    if (argc > 1 && strcmp(argv[1], "-tree") == 0 || true) { //|| true
+        PrettyPrint((Statement*)program, "", true);
+    }
+    printf("\n");
+
+
+
+    Value result = VM_exec(&virtualMachine, &codeObject);
+    printf("%.6f", result.number);
+    //printf("\n%s", AS_STRING(result).string);
 }

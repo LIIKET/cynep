@@ -7,6 +7,8 @@
         "system_error": "c",
         "type_traits": "c",
         "xtr1common": "c",
-        "time.h": "c"
+        "time.h": "c",
+        "stdlib.h": "c",
+        "pthread.h": "c"
     }
 }

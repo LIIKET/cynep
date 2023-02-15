@@ -1,17 +1,1 @@
-type CoolBoi = {
-    hat;
-    girlfriend;
-    asshole;
-}
-
-type MotherPuncher = {
-    song;
-    mastodon;
-}
-
-var y = 321;
-var asd = 123;
-var y = 321 * 10 + 5;
-
-asd = 15;
-y = asd;
+5 + 10 / 2 * (5 + 10) / 2 * 50 * 5 + 5 + 10 / 2 * 5 + 10 / 2 * 50 * 5
