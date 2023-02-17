@@ -39,21 +39,40 @@ int main(int argc, char**argv) {
     int64 te1 = timestamp();
 
     CodeObject codeObject = Compile((Statement*)program);
+
     int64 te2 = timestamp();
     printf("Compiling: %d ms\n", te2/1000-te1/1000);
 
-
     int64 t2 = timestamp();
     printf("Total: %d ms\n", t2/1000-t1/1000);
-    printf("\n");
+
 
     // if (argc > 1 && strcmp(argv[1], "-tree") == 0 || true) { //|| true
     //     PrettyPrint((Statement*)program, "", true);
     // }
-    // printf("\n");
+    printf("\n");
+
+
 
     VM virtualMachine;
     RuntimeValue result = VM_exec(&virtualMachine, &codeObject);
 
+
+
     printf("\nExecution result: %s", RuntimeValueToString(result));
+
+
+
+    printf("\n");
+    int64 tesr1 = timestamp();
+    int a = 0;
+    for (size_t i = 0; i < 1000000; i++)
+    {
+        if(50 > 10){
+            a++;
+        }
+    }
+    
+    int64 tesr2 = timestamp();
+    printf("C Execution time: %d ms\n", tesr2/1000-tesr1/1000);
 }

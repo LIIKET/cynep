@@ -9,6 +9,7 @@
 #define OP_CMP              0x06
 #define OP_JMP_IF_FALSE     0x07
 #define OP_JMP              0x08
+#define OP_POP              0x09
 
 // Comparisons
 #define OP_CMP_GREATER          0x01
@@ -76,8 +77,6 @@ struct CodeObject
     uint64_t constants_last;
 };
 
-
-
 #define NUMBER(value) (RuntimeValue){.type = ValuteType_Number, .number = value}
 #define BOOLEAN(value) (RuntimeValue){.type = ValueType_Boolean, .boolean = value}
 
@@ -107,7 +106,7 @@ char* RuntimeValueToString(RuntimeValue value){
         return buf;
     }
 
-    return "not implemented";
+    return "VM: Not implemented";
 }
 
 RuntimeValue ALLOC_STRING(char* value, size_t length){
@@ -143,7 +142,7 @@ RuntimeValue ALLOC_CODE(char* name, size_t length){
 //  VM Implementation
 //
 
-#define STACK_LIMIT 1000000000
+#define STACK_LIMIT 1000000000//1000000000
 
 struct VM 
 {
@@ -177,22 +176,31 @@ RuntimeValue VM_exec(VM* vm, CodeObject* codeObject){
     } while (false)                             \
 
 RuntimeValue VM_Eval(VM* vm, CodeObject* co){
+    int64 t1 = timestamp();
+
     while(true){
         uint8_t opcode = VM_Read_Byte(vm);
         // printf("OPCODE: 0x%02X\n", opcode);
         switch (opcode)
         {
             case OP_HALT:{
+                    int64 t2 = timestamp();
+
+    printf("Execution time: %d ms\n", t2/1000-t1/1000);
+    printf("\n");
                 return VM_Stack_Pop(vm);
             }     
 
             case OP_CONST: {
-                //uint8_t constIndex = VM_Read_Byte(vm); 
-
                 // printf("%i\n",constIndex2);
                 uint64_t constIndex = VM_Read_Address(vm); // Behöver vi köra 64 bit addresser?
                 RuntimeValue constant = co->constants[constIndex];
                 VM_Stack_Push(vm, &constant);
+                break;
+            }
+
+            case OP_POP:{
+                VM_Stack_Pop(vm);
                 break;
             }
 
@@ -213,8 +221,6 @@ RuntimeValue VM_Eval(VM* vm, CodeObject* co){
                     {
                     case OP_CMP_GREATER:
                         res = op1.number > op2.number;
-                        // printf("%f\n", op1.number);
-                        //                         printf("%f\n", op2.number);
                         break;
                     case OP_CMP_LOWER:
                         res = op1.number < op2.number;
@@ -232,7 +238,7 @@ RuntimeValue VM_Eval(VM* vm, CodeObject* co){
                         res = op1.number != op2.number;
                         break;
                     default:
-                        printf("VM Error. Illegal comparison");
+                        printf("VM: Illegal comparison");
                         exit(0);
                     }
                     VM_Stack_Push(vm, &BOOLEAN(res));
@@ -255,16 +261,12 @@ RuntimeValue VM_Eval(VM* vm, CodeObject* co){
                 uint64_t address = VM_Read_Address(vm);
                 // printf("%i\n", address);
 
-
                 vm->ip = &co->code[address];
 
                 break;
             }
 
             default: {
-                if(opcode == 17){
-                    int asd = 0;
-                }
                 // printf("VM Error. Unrecognized opcode: %#x", opcode);
                 printf("\033[0;31mVM Error. Unrecognized opcode: %#x \033[0m\n", opcode);
                 exit(0);
@@ -272,20 +274,14 @@ RuntimeValue VM_Eval(VM* vm, CodeObject* co){
 
         }
     }
+
+
+    int a = 0;
 }
 
-uint64_t VM_Read_Address(VM* vm){ // Reads 16 bit address
-    // uint8_t bytes[8];
-    // uint64_t big = 65535;
-
-    // memcpy(&bytes[0], &big, sizeof( uint64_t ) );
-    // memcpy(&big, &bytes[0], sizeof( uint64_t ) );
-
-
-
+// Reads 64 bit address
+uint64_t VM_Read_Address(VM* vm){ 
     vm->ip += 8;
-
-        uint16_t facit = ((vm->ip[-2] << 8) | (vm->ip[-1]));
 
     uint64_t res = vm->ip[-8];
     res = (res << 8) | vm->ip[-7];
@@ -297,13 +293,6 @@ uint64_t VM_Read_Address(VM* vm){ // Reads 16 bit address
     res = (res << 8) | vm->ip[-1];
 
     return res;
-    // uint8_t* bptr = &bytes[8];
-    // uint64_t test = 
-    //     (bptr[-2] << 8) 
-    //     | (bptr[-1]);
-
-    //vm->ip += 8; // 24 32 40 48 56 64
-    //return ((vm->ip[-2] << 8) | (vm->ip[-1]));
 }
 
 uint8_t VM_Read_Byte(VM* vm){
@@ -316,7 +305,7 @@ uint8_t VM_Peek_Byte(VM* vm){
 
 void VM_Stack_Push(VM* vm, RuntimeValue* value){
     if(vm->sp == vm->stack_end){
-        printf("VM Error. Stack Overflow\n");
+        printf("VM: Stack Overflow\n");
         exit(0); 
     }
     RuntimeValue asd = *value;
@@ -325,8 +314,8 @@ void VM_Stack_Push(VM* vm, RuntimeValue* value){
 }
 
 RuntimeValue VM_Stack_Pop(VM* vm){
-    if(vm->sp == vm->stack_start){
-        printf("VM Error. Empty stack\n");
+    if(vm->sp < vm->stack_start){
+        printf("VM: Empty stack\n");
         exit(0); 
     }
     vm->sp--;
