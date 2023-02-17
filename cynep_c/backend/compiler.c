@@ -4,22 +4,24 @@ void Gen(CodeObject* co, Statement* statement);
 void Emit(CodeObject* co, uint8_t code);
 CodeObject Compile(Statement* statement);
 size_t Get_Offset(CodeObject* co);
-void Patch_Jump_Address(CodeObject* co, size_t offset, uint16_t value);
+void Write_Address_At_Offset(CodeObject* co, size_t offset, uint16_t value);
 void Write_Byte_At_Offset(CodeObject* co, size_t offset, uint8_t value);
+void Emit16(CodeObject* co, uint16_t value);
 
 CodeObject Compile(Statement* statement){
     CodeObject co = AS_CODE(ALLOC_CODE("main", 4));
 
     // TODO: Need a growing array for this
-    co.code = malloc(sizeof(uint8_t) * 1000000000); // KRASCHAR OM FÖR MYCKET KOD
+    co.code = malloc(sizeof(uint8_t) * 100000000); // KRASCHAR OM FÖR MYCKET KOD
     co.constants = malloc(sizeof(RuntimeValue) * 100000000); // KRASCHAR OM FÖR MÅNGA KONSTANTER (värden i kod)
 
-    SSNode* current_node = statement->block_statement.body->first;
-    while (current_node != NULL)
-    {
-        Gen(&co, statement);
-        current_node = current_node->next;
-    }
+    // SSNode* current_node = statement->block_statement.body->first;
+    // while (current_node != NULL)
+    // {
+    //     Gen(&co, statement);
+    //     current_node = current_node->next;
+    // }
+    Gen(&co, statement);
     
     Emit(&co, OP_HALT);
 
@@ -54,8 +56,7 @@ void Gen(CodeObject* co, Statement* statement){
 
             Gen(co, (Statement*)expression.left);
             Gen(co, (Statement*)expression.right);
-                Emit(co, OP_CMP);
-                Emit(co, OP_CMP_GREATER);
+
             if(expression.operator[0] == '>'){
                 Emit(co, OP_CMP);
                 Emit(co, OP_CMP_GREATER);
@@ -106,7 +107,7 @@ void Gen(CodeObject* co, Statement* statement){
 
             // Patch else branch address
             size_t else_branch_address = Get_Offset(co);
-            Patch_Jump_Address(co, else_jmp_address, else_branch_address);
+            Write_Address_At_Offset(co, else_jmp_address, else_branch_address);
 
             if(expression.alternate != NULL){
                 Gen(co, (Statement*)expression.alternate); // Emit alternate if present
@@ -121,7 +122,7 @@ void Gen(CodeObject* co, Statement* statement){
 
             // Patch end of "if" address
             size_t end_branch_address = Get_Offset(co);
-            Patch_Jump_Address(co, end_address, end_branch_address);
+            Write_Address_At_Offset(co, end_address, end_branch_address);
 
             break;
         }
@@ -140,7 +141,15 @@ void Gen(CodeObject* co, Statement* statement){
             NumericLiteral expression = *(NumericLiteral*)statement;
             co->constants[co->constants_last] = NUMBER(expression.value);
             Emit(co, OP_CONST);
-            Emit(co, co->constants_last);
+            Emit16(co, co->constants_last);
+
+
+            //TEST
+            // Emit(co, 0); // Two bytes for end address
+            // Emit(co, 0);
+            // size_t end_address = Get_Offset(co) - 2;
+            // Write_Address_At_Offset(co, end_address, co->constants_last);
+
             co->constants_last++;
             break;
         }
@@ -149,13 +158,26 @@ void Gen(CodeObject* co, Statement* statement){
             if(strncmp (identifier.name.start,"true", identifier.name.length) == 0){
                 co->constants[co->constants_last] = BOOLEAN(true);
                 Emit(co, OP_CONST);
-                Emit(co, co->constants_last);
+                Emit16(co, co->constants_last);
+                
+                //TEST
+                // Emit(co, 0); // Two bytes for end address
+                // Emit(co, 0);
+                // size_t end_address = Get_Offset(co) - 2;
+                // Write_Address_At_Offset(co, end_address, co->constants_last);
+
                 co->constants_last++;
             }
             else if(strncmp (identifier.name.start,"false", identifier.name.length) == 0){
                 co->constants[co->constants_last] = BOOLEAN(false);
                 Emit(co, OP_CONST);
-                Emit(co, co->constants_last);
+                Emit16(co, co->constants_last);
+                //TEST
+                // Emit(co, 0); // Two bytes for end address
+                // Emit(co, 0);
+                // size_t end_address = Get_Offset(co) - 2;
+                // Write_Address_At_Offset(co, end_address, co->constants_last);
+
                 co->constants_last++;
             }
             else{
@@ -182,12 +204,21 @@ void Write_Byte_At_Offset(CodeObject* co, size_t offset, uint8_t value){
     co->code[offset] = value;
 }
 
-void Patch_Jump_Address(CodeObject* co, size_t offset, uint16_t value){ // uint16 for two byte address
+void Write_Address_At_Offset(CodeObject* co, size_t offset, uint16_t value){ // uint16 for two byte address
     Write_Byte_At_Offset(co, offset, (value >> 8) & 0xff);
     Write_Byte_At_Offset(co, offset + 1, (value) & 0xff);
 }
 
 void Emit(CodeObject* co, uint8_t code){
     co->code[co->code_last] = code;
+    co->code_last++;
+}
+
+void Emit16(CodeObject* co, uint16_t value){
+    uint8_t byte1 = (value >> 8) & 0xff;
+    uint8_t byte2 = value & 0xff;
+    co->code[co->code_last] = byte1;
+    co->code_last++;
+    co->code[co->code_last] = byte2;
     co->code_last++;
 }

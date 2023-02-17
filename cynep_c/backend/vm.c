@@ -31,6 +31,7 @@ uint8_t VM_Read_Byte(VM* vm);
 RuntimeValue VM_Stack_Pop(VM* vm);
 void VM_Stack_Push(VM* vm, RuntimeValue* value);
 uint16_t VM_Read_Address(VM* vm);
+uint8_t VM_Peek_Byte(VM* vm);
 
 enum ValueType{
     ValuteType_Number,
@@ -72,7 +73,7 @@ struct CodeObject
     uint8_t* code; // Bytearray of opcodes
     size_t code_last;
     RuntimeValue* constants;
-    size_t constants_last;
+    uint16_t constants_last;
 };
 
 
@@ -142,7 +143,7 @@ RuntimeValue ALLOC_CODE(char* name, size_t length){
 //  VM Implementation
 //
 
-#define STACK_LIMIT 512000
+#define STACK_LIMIT 1000000000
 
 struct VM 
 {
@@ -178,7 +179,7 @@ RuntimeValue VM_exec(VM* vm, CodeObject* codeObject){
 RuntimeValue VM_Eval(VM* vm, CodeObject* co){
     while(true){
         uint8_t opcode = VM_Read_Byte(vm);
-        // printf("OPCODE: 0x%08X\n", opcode);
+        // printf("OPCODE: 0x%02X\n", opcode);
         switch (opcode)
         {
             case OP_HALT:{
@@ -186,7 +187,10 @@ RuntimeValue VM_Eval(VM* vm, CodeObject* co){
             }     
 
             case OP_CONST: {
-                uint8_t constIndex = VM_Read_Byte(vm);
+                //uint8_t constIndex = VM_Read_Byte(vm); 
+
+                // printf("%i\n",constIndex2);
+                uint16_t constIndex = VM_Read_Address(vm); // Behöver vi köra 64 bit addresser?
                 RuntimeValue constant = co->constants[constIndex];
                 VM_Stack_Push(vm, &constant);
                 break;
@@ -198,17 +202,19 @@ RuntimeValue VM_Eval(VM* vm, CodeObject* co){
             case OP_DIV: BINARY_OP(/); break;
             
             case OP_CMP:{
-                uint8_t constIndex = VM_Read_Byte(vm);
+                uint8_t cmp_type = VM_Read_Byte(vm);
                 RuntimeValue op2 = VM_Stack_Pop(vm);
                 RuntimeValue op1 = VM_Stack_Pop(vm);
 
                 if(op2.type == ValuteType_Number && op1.type == ValuteType_Number){
 
                     bool res;
-                    switch (constIndex)
+                    switch (cmp_type)
                     {
                     case OP_CMP_GREATER:
                         res = op1.number > op2.number;
+                        // printf("%f\n", op1.number);
+                        //                         printf("%f\n", op2.number);
                         break;
                     case OP_CMP_LOWER:
                         res = op1.number < op2.number;
@@ -247,11 +253,23 @@ RuntimeValue VM_Eval(VM* vm, CodeObject* co){
             }
             case OP_JMP:{
                 uint16_t address = VM_Read_Address(vm);
+                printf("%i\n", address);
+
+
                 vm->ip = &co->code[address];
+
+                uint8_t test = VM_Peek_Byte(vm);
+                if(test == 17){
+                    printf("APAASD");
+                }
+
                 break;
             }
 
             default: {
+                if(opcode == 17){
+                    int asd = 0;
+                }
                 // printf("VM Error. Unrecognized opcode: %#x", opcode);
                 printf("\033[0;31mVM Error. Unrecognized opcode: %#x \033[0m\n", opcode);
                 exit(0);
@@ -268,6 +286,10 @@ uint16_t VM_Read_Address(VM* vm){ // Reads 16 bit address
 
 uint8_t VM_Read_Byte(VM* vm){
     return *vm->ip++;
+}
+
+uint8_t VM_Peek_Byte(VM* vm){
+    return *vm->ip;
 }
 
 void VM_Stack_Push(VM* vm, RuntimeValue* value){
