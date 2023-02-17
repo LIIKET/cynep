@@ -280,7 +280,7 @@ RuntimeValue VM_Eval(VM* vm, CodeObject* co){
 }
 
 uint16_t VM_Read_Address(VM* vm){ // Reads 16 bit address
-    vm->ip += 2;
+    vm->ip += 2; // 24 32 40 48 56 64
     return ((vm->ip[-2] << 8) | (vm->ip[-1]));
 }
 
