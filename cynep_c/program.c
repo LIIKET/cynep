@@ -37,7 +37,7 @@ int main(int argc, char**argv) {
     Statement* program = Build_SyntaxTree(tokens);
 
     int64 te1 = timestamp();
-    VM virtualMachine;
+
     CodeObject codeObject = Compile((Statement*)program);
     int64 te2 = timestamp();
     printf("Compiling: %d ms\n", te2/1000-te1/1000);
@@ -50,10 +50,10 @@ int main(int argc, char**argv) {
     // if (argc > 1 && strcmp(argv[1], "-tree") == 0 || true) { //|| true
     //     PrettyPrint((Statement*)program, "", true);
     // }
-    printf("\n");
+    // printf("\n");
 
-
+    VM virtualMachine;
     RuntimeValue result = VM_exec(&virtualMachine, &codeObject);
 
-    printf("\n%s", RuntimeValueToString(result));
+    printf("\nExecution result: %s", RuntimeValueToString(result));
 }

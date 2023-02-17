@@ -4,16 +4,16 @@ void Gen(CodeObject* co, Statement* statement);
 void Emit(CodeObject* co, uint8_t code);
 CodeObject Compile(Statement* statement);
 size_t Get_Offset(CodeObject* co);
-void Write_Address_At_Offset(CodeObject* co, size_t offset, uint16_t value);
+void Write_Address_At_Offset(CodeObject* co, size_t offset, uint64_t value);
 void Write_Byte_At_Offset(CodeObject* co, size_t offset, uint8_t value);
-void Emit16(CodeObject* co, uint16_t value);
+void Emit16(CodeObject* co, uint64_t value);
 
 CodeObject Compile(Statement* statement){
     CodeObject co = AS_CODE(ALLOC_CODE("main", 4));
 
     // TODO: Need a growing array for this
-    co.code = malloc(sizeof(uint8_t) * 100000000); // KRASCHAR OM FÖR MYCKET KOD
-    co.constants = malloc(sizeof(RuntimeValue) * 100000000); // KRASCHAR OM FÖR MÅNGA KONSTANTER (värden i kod)
+    co.code = malloc(sizeof(uint8_t) * 100000000); // 10 000 000 KRASCHAR OM FÖR MYCKET KOD
+    co.constants = malloc(sizeof(RuntimeValue) * 100000000); // 10 000 000 KRASCHAR OM FÖR MÅNGA KONSTANTER (värden i kod)
 
     // SSNode* current_node = statement->block_statement.body->first;
     // while (current_node != NULL)
@@ -96,14 +96,26 @@ void Gen(CodeObject* co, Statement* statement){
 
             Emit(co, 0); // Two bytes for alternate address
             Emit(co, 0);
-            size_t else_jmp_address = Get_Offset(co) - 2;
+            Emit(co, 0); // Two bytes for alternate address
+            Emit(co, 0);
+            Emit(co, 0); // Two bytes for alternate address
+            Emit(co, 0);
+            Emit(co, 0); // Two bytes for alternate address
+            Emit(co, 0);
+            size_t else_jmp_address = Get_Offset(co) - 8;
 
             Gen(co, (Statement*)expression.consequent); // Emit consequent
             Emit(co, OP_JMP); 
 
-            Emit(co, 0); // Two bytes for end address
+            Emit(co, 0); // Two bytes for alternate address
             Emit(co, 0);
-            size_t end_address = Get_Offset(co) - 2;
+            Emit(co, 0); // Two bytes for alternate address
+            Emit(co, 0);
+            Emit(co, 0); // Two bytes for alternate address
+            Emit(co, 0);
+            Emit(co, 0); // Two bytes for alternate address
+            Emit(co, 0);
+            size_t end_address = Get_Offset(co) - 8;
 
             // Patch else branch address
             size_t else_branch_address = Get_Offset(co);
@@ -204,9 +216,31 @@ void Write_Byte_At_Offset(CodeObject* co, size_t offset, uint8_t value){
     co->code[offset] = value;
 }
 
-void Write_Address_At_Offset(CodeObject* co, size_t offset, uint16_t value){ // uint16 for two byte address
-    Write_Byte_At_Offset(co, offset, (value >> 8) & 0xff);
-    Write_Byte_At_Offset(co, offset + 1, (value) & 0xff);
+void Write_Address_At_Offset(CodeObject* co, size_t offset, uint64_t value){ // uint16 for two byte address
+     Write_Byte_At_Offset(co, offset, (value >> 8) & 0xff);
+     Write_Byte_At_Offset(co, offset + 1, (value) & 0xff);
+
+    // uint64_t val = 0xFFFFFFFFFFFFFFFF;
+
+    uint8_t byte1 = (value >> 56) & 0xFFFFFFFFFFFFFFFF; 
+    uint8_t byte2 = (value >> 48) & 0xFFFFFFFFFFFFFFFF; 
+    uint8_t byte3 = (value >> 40) & 0xFFFFFFFFFFFFFFFF; 
+    uint8_t byte4 = (value >> 32) & 0xFFFFFFFFFFFFFFFF; 
+    uint8_t byte5 = (value >> 24) & 0xFFFFFFFFFFFFFFFF; 
+    uint8_t byte6 = (value >> 16) & 0xFFFFFFFFFFFFFFFF; 
+    uint8_t byte7 = (value >> 8) & 0xFFFFFFFFFFFFFFFF; 
+    uint8_t byte8 = value & 0xFFFFFFFFFFFFFFFF;
+
+    Write_Byte_At_Offset(co, offset, byte1);
+    Write_Byte_At_Offset(co, offset + 1, byte2);
+    Write_Byte_At_Offset(co, offset + 2, byte3);
+    Write_Byte_At_Offset(co, offset + 3, byte4);
+    Write_Byte_At_Offset(co, offset + 4, byte5);
+    Write_Byte_At_Offset(co, offset + 5, byte6);
+    Write_Byte_At_Offset(co, offset + 6, byte7);
+    Write_Byte_At_Offset(co, offset + 7, byte8);
+    // int asd = 0;
+    // memcpy(&co->code[offset], &value, sizeof( uint16_t ) );
 }
 
 void Emit(CodeObject* co, uint8_t code){
@@ -214,11 +248,31 @@ void Emit(CodeObject* co, uint8_t code){
     co->code_last++;
 }
 
-void Emit16(CodeObject* co, uint16_t value){
-    uint8_t byte1 = (value >> 8) & 0xff;
-    uint8_t byte2 = value & 0xff;
+void Emit16(CodeObject* co, uint64_t value){
+    uint8_t byte1 = (value >> 56) & 0xFFFFFFFFFFFFFFFF; 
+    uint8_t byte2 = (value >> 48) & 0xFFFFFFFFFFFFFFFF; 
+    uint8_t byte3 = (value >> 40) & 0xFFFFFFFFFFFFFFFF; 
+    uint8_t byte4 = (value >> 32) & 0xFFFFFFFFFFFFFFFF; 
+    uint8_t byte5 = (value >> 24) & 0xFFFFFFFFFFFFFFFF; 
+    uint8_t byte6 = (value >> 16) & 0xFFFFFFFFFFFFFFFF; 
+    uint8_t byte7 = (value >> 8) & 0xFFFFFFFFFFFFFFFF; 
+    uint8_t byte8 = value & 0xFFFFFFFFFFFFFFFF;
+
     co->code[co->code_last] = byte1;
-    co->code_last++;
-    co->code[co->code_last] = byte2;
-    co->code_last++;
+    co->code[co->code_last + 1] = byte2;
+    co->code[co->code_last + 2] = byte3;
+    co->code[co->code_last + 3] = byte4;
+    co->code[co->code_last + 4] = byte5;
+    co->code[co->code_last + 5] = byte6;
+    co->code[co->code_last + 6] = byte7;
+    co->code[co->code_last + 7] = byte8;
+
+    co->code_last+=8;
+
+    // uint8_t byte1 = (value >> 8) & 0xff;
+    // uint8_t byte2 = value & 0xff;
+    // co->code[co->code_last] = byte1;
+    // co->code_last++;
+    // co->code[co->code_last] = byte2;
+    // co->code_last++;
 }

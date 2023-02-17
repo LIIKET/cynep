@@ -30,7 +30,7 @@ RuntimeValue VM_Eval(VM* vm, CodeObject* codeObject);
 uint8_t VM_Read_Byte(VM* vm);
 RuntimeValue VM_Stack_Pop(VM* vm);
 void VM_Stack_Push(VM* vm, RuntimeValue* value);
-uint16_t VM_Read_Address(VM* vm);
+uint64_t VM_Read_Address(VM* vm);
 uint8_t VM_Peek_Byte(VM* vm);
 
 enum ValueType{
@@ -73,7 +73,7 @@ struct CodeObject
     uint8_t* code; // Bytearray of opcodes
     size_t code_last;
     RuntimeValue* constants;
-    uint16_t constants_last;
+    uint64_t constants_last;
 };
 
 
@@ -190,7 +190,7 @@ RuntimeValue VM_Eval(VM* vm, CodeObject* co){
                 //uint8_t constIndex = VM_Read_Byte(vm); 
 
                 // printf("%i\n",constIndex2);
-                uint16_t constIndex = VM_Read_Address(vm); // Behöver vi köra 64 bit addresser?
+                uint64_t constIndex = VM_Read_Address(vm); // Behöver vi köra 64 bit addresser?
                 RuntimeValue constant = co->constants[constIndex];
                 VM_Stack_Push(vm, &constant);
                 break;
@@ -244,7 +244,7 @@ RuntimeValue VM_Eval(VM* vm, CodeObject* co){
             }
             case OP_JMP_IF_FALSE:{
                 bool condition = VM_Stack_Pop(vm).boolean;
-                uint16_t address = VM_Read_Address(vm);
+                uint64_t address = VM_Read_Address(vm);
 
                 if(!condition){
                     vm->ip = &co->code[address];
@@ -252,16 +252,11 @@ RuntimeValue VM_Eval(VM* vm, CodeObject* co){
                 break;
             }
             case OP_JMP:{
-                uint16_t address = VM_Read_Address(vm);
-                printf("%i\n", address);
+                uint64_t address = VM_Read_Address(vm);
+                // printf("%i\n", address);
 
 
                 vm->ip = &co->code[address];
-
-                uint8_t test = VM_Peek_Byte(vm);
-                if(test == 17){
-                    printf("APAASD");
-                }
 
                 break;
             }
@@ -279,9 +274,36 @@ RuntimeValue VM_Eval(VM* vm, CodeObject* co){
     }
 }
 
-uint16_t VM_Read_Address(VM* vm){ // Reads 16 bit address
-    vm->ip += 2; // 24 32 40 48 56 64
-    return ((vm->ip[-2] << 8) | (vm->ip[-1]));
+uint64_t VM_Read_Address(VM* vm){ // Reads 16 bit address
+    // uint8_t bytes[8];
+    // uint64_t big = 65535;
+
+    // memcpy(&bytes[0], &big, sizeof( uint64_t ) );
+    // memcpy(&big, &bytes[0], sizeof( uint64_t ) );
+
+
+
+    vm->ip += 8;
+
+        uint16_t facit = ((vm->ip[-2] << 8) | (vm->ip[-1]));
+
+    uint64_t res = vm->ip[-8];
+    res = (res << 8) | vm->ip[-7];
+    res = (res << 8) | vm->ip[-6];
+    res = (res << 8) | vm->ip[-5];
+    res = (res << 8) | vm->ip[-4];
+    res = (res << 8) | vm->ip[-3];
+    res = (res << 8) | vm->ip[-2];
+    res = (res << 8) | vm->ip[-1];
+
+    return res;
+    // uint8_t* bptr = &bytes[8];
+    // uint64_t test = 
+    //     (bptr[-2] << 8) 
+    //     | (bptr[-1]);
+
+    //vm->ip += 8; // 24 32 40 48 56 64
+    //return ((vm->ip[-2] << 8) | (vm->ip[-1]));
 }
 
 uint8_t VM_Read_Byte(VM* vm){
