@@ -13,9 +13,11 @@ TypeDeclaration*        Parse_TypeDeclaration();
 Expression*             Parse_AssignmentExpression();
 Expression*             Parse_PrimaryExpression();
 
-Expression*             Parse_ComparisonExpression();
+Expression* Parse_ComparisonExpression();
 Expression*             Parse_AdditiveExpression();
 Expression*             Parse_MultiplicativeExpression();
+IfStatement* Parse_IfStatement();
+BlockStatement* Parse_BlockStatement();
 
 //
 // Globals
@@ -95,13 +97,12 @@ Statement* Build_SyntaxTree(Token* tokens)
     nodes = (Statement*)malloc(sizeof(Statement) * nodes_max);
     list_nodes = (SSNode*)malloc(sizeof(SSNode) * list_nodes_max);
 
-    Statement* program = Create_Program(Seed_Memory(), (SSList*)Seed_SSNode_Memory());
+    Statement* block = (Statement*)Create_BlockStatement(Seed_Memory(), (SSList*)Seed_SSNode_Memory());
 
     while(!End_Of_File()){
-
         Statement* statement = Parse_Statement();
         SSNode* node = SSNode_Create(Seed_SSNode_Memory(),statement);
-        SSList_Append(program->program.body, node);
+        SSList_Append(block->block_statement.body, node);
     }
 
     int64 t2 = timestamp();
@@ -112,7 +113,7 @@ Statement* Build_SyntaxTree(Token* tokens)
     //     printf("%s\n", nodes[i].name);
     // }
 
-    return program;
+    return block;
 }
 
 Statement* Parse_Statement()
@@ -125,10 +126,45 @@ Statement* Parse_Statement()
         case Token_Type: {
             return (Statement*)Parse_TypeDeclaration();
         }
+        case Token_If: {
+            return (Statement*)Parse_IfStatement();
+        }
         default: {
             return (Statement*)Parse_Expression();
         }
     }
+}
+
+IfStatement* Parse_IfStatement()
+{
+    Token if_token = Consume();
+    ConsumeExpect(Token_OpenParen, "If statement should be followed by an open parenthesis.");
+    ComparisonExpression* test = (ComparisonExpression*)Parse_ComparisonExpression();
+    ConsumeExpect(Token_CloseParen, "Missing close parenthesis in if statement.");
+    
+    Statement* consequtive;
+    if(Current().type == Token_OpenBrace){
+        consequtive = (Statement*)Parse_BlockStatement();
+    }
+    else{
+        // TODO: Parse single statement. Fuck this for now.
+    }
+
+    return Create_IfStatement((Statement*)Seed_Memory(), test, consequtive);
+}
+
+BlockStatement* Parse_BlockStatement(){
+    Consume(); // Open brace
+    BlockStatement* block = Create_BlockStatement(Seed_Memory(), (SSList*)Seed_SSNode_Memory());
+
+    while(Current().type != Token_CloseBrace){
+        Statement* statement = Parse_Statement();
+        SSNode* node = SSNode_Create(Seed_SSNode_Memory(),statement);
+        SSList_Append(block->body, node);
+    }
+    ConsumeExpect(Token_CloseBrace, "Missing close brace in block.");
+
+    return block;
 }
 
 VariableDeclaration* Parse_VariableDeclaration()
@@ -194,12 +230,12 @@ Expression* Parse_Expression()
 
 Expression* Parse_AssignmentExpression()
 {
-    Expression* left = Parse_AdditiveExpression();
+    Expression* left = Parse_ComparisonExpression();
 
     if(Current().type == Token_Assignment)
     {
         Consume();
-        Expression* value = Parse_AdditiveExpression();
+        Expression* value = Parse_ComparisonExpression();
         ConsumeExpect(Token_Semicolon, "Variable assignment must end with semicolon.");
         return (Expression*)Create_AssignmentExpression(Seed_Memory(), left, value);
     }
@@ -211,7 +247,7 @@ Expression* Parse_ComparisonExpression()
 {
     Expression* left = Parse_AdditiveExpression();
 
-    while (0 == strcmp(Current().operator_value, "==")
+    while (0 == strcmp(Current().operator_value,"==")
         || 0 == strcmp(Current().operator_value,"!=")  
         || 0 == strcmp(Current().operator_value,">" )
         || 0 == strcmp(Current().operator_value,">=") 

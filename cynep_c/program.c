@@ -38,7 +38,7 @@ int main(int argc, char**argv) {
 
     int64 te1 = timestamp();
     VM virtualMachine;
-    CodeObject codeObject = Compile((Statement*)program->program.body->first->value);
+    CodeObject codeObject = Compile((Statement*)program);
     int64 te2 = timestamp();
     printf("Compiling: %d ms\n", te2/1000-te1/1000);
 
@@ -46,15 +46,14 @@ int main(int argc, char**argv) {
     int64 t2 = timestamp();
     printf("Total: %d ms\n", t2/1000-t1/1000);
     printf("\n");
-    
-    if (argc > 1 && strcmp(argv[1], "-tree") == 0 || true) { //|| true
-        PrettyPrint((Statement*)program, "", true);
-    }
+
+    // if (argc > 1 && strcmp(argv[1], "-tree") == 0 || true) { //|| true
+    //     PrettyPrint((Statement*)program, "", true);
+    // }
     printf("\n");
 
 
+    RuntimeValue result = VM_exec(&virtualMachine, &codeObject);
 
-    Value result = VM_exec(&virtualMachine, &codeObject);
-    printf("%.6f", result.number);
-    //printf("\n%s", AS_STRING(result).string);
+    printf("\n%s", RuntimeValueToString(result));
 }

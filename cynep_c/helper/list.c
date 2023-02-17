@@ -48,8 +48,8 @@ SSNode* SSNode_Create(SSNode* node, void* value)
 
 void SSList_Free(SSList* list)
 {
-    SSNode* headNode = list->first;
-    SSNode* currentNode;
+    // SSNode* headNode = list->first;
+    // SSNode* currentNode;
 
     // Cannot free cause they are allocated in chunks
     // TODO: Set freeable property on ones created only for display purposes and free them

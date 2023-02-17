@@ -2,7 +2,7 @@
 
 typedef enum   NodeType NodeType;
 typedef struct Statement Statement;
-typedef struct Program Program;
+typedef struct BlockStatement BlockStatement;
 typedef struct Identifier Identifier;
 typedef struct NumericLiteral NumericLiteral;
 typedef struct VariableDeclaration VariableDeclaration;
@@ -14,11 +14,13 @@ typedef struct AssignmentExpression AssignmentExpression;
 typedef struct BinaryExpression BinaryExpression;
 typedef struct BinaryExpression ComparisonExpression;
 typedef struct Expression Expression;
+typedef struct IfStatement IfStatement;
 
 enum NodeType 
 {
     // Statements
-    AST_Program,
+    AST_BlockStatement,
+    AST_IfStatement,
     AST_VariableDeclaration,
     AST_TypeDefinition,
     AST_PropertyDeclaration,
@@ -35,9 +37,16 @@ enum NodeType
     AST_Identifier,
 };
 
-struct Program 
+struct BlockStatement 
 {
     SSList* body; // Statements
+};
+
+struct IfStatement
+{
+    ComparisonExpression* test;
+    Statement* consequent; // Statements
+    Statement* alternate; // Statements
 };
 
 struct Identifier 
@@ -98,7 +107,8 @@ struct Statement
 {
     union
     {
-        Program program;
+        BlockStatement block_statement;
+        IfStatement ifStatement;
         Identifier identifier;
         NumericLiteral numeric_literal;
         VariableDeclaration variable_declaration;
@@ -116,17 +126,17 @@ struct Statement
 struct Expression {
     Statement statement;
 };
+
 //
 // Initializers
 //
 
-Statement* Create_Program(Statement* node, SSList* body)
+BlockStatement* Create_BlockStatement(Statement* node, SSList* body)
 {
-    // Statement* node = (Statement*)malloc(sizeof(Statement));
-    node->type = AST_Program;
-    node->program.body = SSList_Create(body);
+    node->type = AST_BlockStatement;
+    node->block_statement.body = SSList_Create(body);
 
-    return node;
+    return (BlockStatement*)node;
 }
 
 VariableDeclaration* Create_VariableDeclaration(Statement* memory, BufferString name, Expression* value)
@@ -208,6 +218,16 @@ ComparisonExpression* Create_ComparisonExpression(Statement* memory, Expression*
     return (ComparisonExpression*)memory;
 }
 
+IfStatement* Create_IfStatement(Statement* memory, ComparisonExpression* test, Statement* consequent)
+{
+    memory->type = AST_IfStatement;
+    memory->ifStatement.test = test;
+    memory->ifStatement.consequent = consequent;
+    memory->ifStatement.alternate = NULL;
+
+    return (IfStatement*)memory;
+}
+
 Identifier* Create_Identifier(Statement* memory, BufferString name)
 {
     memory->type = AST_Identifier;
@@ -236,10 +256,10 @@ SSList* Get_Children(Statement* expression)
 
     switch (expression->type)
     {
-        case AST_Program:
+        case AST_BlockStatement:
         {
             Statement* node = expression;
-            return node->program.body;
+            return node->block_statement.body;
 
             break;
         }
@@ -289,6 +309,32 @@ SSList* Get_Children(Statement* expression)
         }
         case AST_ComparisonExpression:
         {
+            BinaryExpression* node = (BinaryExpression*)expression;
+
+            SSNode* left_node = SSNode_Create(malloc(sizeof(SSNode)), node->left);
+            SSList_Append(list, left_node);
+
+            SSNode* right_node = SSNode_Create(malloc(sizeof(SSNode)), node->right);
+            SSList_Append(list, right_node);
+
+            break;
+        }
+        case AST_IfStatement:{
+            IfStatement* node = (IfStatement*)expression;
+
+            SSNode* test_node = SSNode_Create(malloc(sizeof(SSNode)), node->test);
+            SSList_Append(list, test_node);
+
+            SSNode* left_node = SSNode_Create(malloc(sizeof(SSNode)), node->consequent);
+            SSList_Append(list, left_node);
+
+            if(node->alternate != NULL){
+                SSNode* right_node = SSNode_Create(malloc(sizeof(SSNode)), node->alternate);
+                SSList_Append(list, right_node);
+            }
+
+
+
             break;
         }
         case AST_MemberExpression:
@@ -318,9 +364,9 @@ void Print_Node(Statement* node)
 {
     switch (node->type)
     {
-        case AST_Program:
+        case AST_BlockStatement:
         {
-            printf("Program");
+            printf("BlockStatement");
             break;
         }
         case AST_VariableDeclaration:
@@ -358,6 +404,11 @@ void Print_Node(Statement* node)
             printf("MemberExpression");    
             break;     
         }
+        case AST_IfStatement:
+        {
+            printf("IfStatement");    
+            break;     
+        }
         case AST_CallExpression:
         {
             printf("CallExpression");   
@@ -366,7 +417,7 @@ void Print_Node(Statement* node)
         case AST_NumericLiteral:
         {
             NumericLiteral* item = (NumericLiteral*)node;
-            printf("NumericLiteral: %i", item->value);  
+            printf("NumericLiteral: %i", item->value);
             break;    
         }
         case AST_Identifier:
@@ -383,48 +434,48 @@ void Print_Node(Statement* node)
 }
 
 void PrettyPrint(Statement* node, char* indent, bool isLast){
-char* marker;
+    char* marker;
 
-if(isLast)
-    marker = "└───";
-else
-    marker = "├───";
+    if(isLast)
+        marker = "└───";
+    else
+        marker = "├───";
 
-SSList* children = Get_Children(node);
+    SSList* children = Get_Children(node);
 
-printf("%s", indent);
-printf("%s", marker);
-Print_Node(node);
-printf("\n");
+    printf("%s", indent);
+    printf("%s", marker);
+    Print_Node(node);
+    printf("\n");
 
-char *new_indent = (char*)malloc(strlen(indent) + 8);
-strcpy(new_indent, indent);
+    char *new_indent = (char*)malloc(strlen(indent) + 8);
+    strcpy(new_indent, indent);
 
-if(isLast)
-{
-    strcat(new_indent, "    ");     
+    if(isLast)
+    {
+        strcat(new_indent, "    ");     
 
-    // if(children->first != NULL){
-    //     printf("%s│\n", new_indent);
-    // }
-}
-else
-    strcat(new_indent, "│   ");
+        // if(children->first != NULL){
+        //     printf("%s│\n", new_indent);
+        // }
+    }
+    else
+        strcat(new_indent, "│   ");
 
-Statement* lastChild;
+    Statement* lastChild;
 
-if(children->first == NULL)
-    lastChild = NULL;
-else
-    lastChild = (Statement*)children->last->value;
+    if(children->first == NULL)
+        lastChild = NULL;
+    else
+        lastChild = (Statement*)children->last->value;
 
-SSNode* cursor = children->first;
-while(cursor != NULL){
-    PrettyPrint(cursor->value, new_indent, cursor->next == NULL);
-    cursor = cursor->next;
-}
+    SSNode* cursor = children->first;
+    while(cursor != NULL){
+        PrettyPrint(cursor->value, new_indent, cursor->next == NULL);
+        cursor = cursor->next;
+    }
 
-// Cleanup
-SSList_Free(children);
-free(new_indent);
+    // Cleanup
+    SSList_Free(children);
+    free(new_indent);
 }

@@ -3,17 +3,25 @@
 void Gen(CodeObject* co, Statement* statement);
 void Emit(CodeObject* co, uint8_t code);
 CodeObject Compile(Statement* statement);
+size_t Get_Offset(CodeObject* co);
+void Patch_Jump_Address(CodeObject* co, size_t offset, uint16_t value);
+void Write_Byte_At_Offset(CodeObject* co, size_t offset, uint8_t value);
 
 CodeObject Compile(Statement* statement){
     CodeObject co = AS_CODE(ALLOC_CODE("main", 4));
 
     // TODO: Need a growing array for this
-    co.code = malloc(sizeof(uint8_t) * 100);
-    co.constants = malloc(sizeof(Value) * 100);
+    co.code = malloc(sizeof(uint8_t) * 1000000000); // KRASCHAR OM FÖR MYCKET KOD
+    co.constants = malloc(sizeof(RuntimeValue) * 100000000); // KRASCHAR OM FÖR MÅNGA KONSTANTER (värden i kod)
 
-
-    Gen(&co, statement);
-        Emit(&co, OP_HALT);
+    SSNode* current_node = statement->block_statement.body->first;
+    while (current_node != NULL)
+    {
+        Gen(&co, statement);
+        current_node = current_node->next;
+    }
+    
+    Emit(&co, OP_HALT);
 
     return co;
 }
@@ -23,37 +31,109 @@ void Gen(CodeObject* co, Statement* statement){
     {
         case AST_BinaryExpression:{
             BinaryExpression expression = *(BinaryExpression*)statement;
-            
-            switch (expression.operator[0])
-            {
-                case '+':{
-                    Gen(co, (Statement*)expression.left);
-                    Gen(co, (Statement*)expression.right);
-                    Emit(co, OP_ADD);
-                    break;
-                }
-                case '-':{
-                    Gen(co, (Statement*)expression.left);
-                    Gen(co, (Statement*)expression.right);
-                    Emit(co, OP_SUB);
-                    break;
-                }
-                case '*':{
-                    Gen(co, (Statement*)expression.left);
-                    Gen(co, (Statement*)expression.right);
-                    Emit(co, OP_MUL);
-                    break;
-                }
-                case '/':{
-                    Gen(co, (Statement*)expression.left);
-                    Gen(co, (Statement*)expression.right);
-                    Emit(co, OP_DIV);
-                    break;
-                }
-                default:
-                    break;
+
+            Gen(co, (Statement*)expression.left);
+            Gen(co, (Statement*)expression.right);
+
+            if(expression.operator[0] == '+'){
+                Emit(co, OP_ADD);
+            }
+            else if(expression.operator[0] == '-'){
+                Emit(co, OP_SUB);
+            }
+            else if(expression.operator[0] == '*'){
+                Emit(co, OP_MUL);
+            }
+            else if(expression.operator[0] == '/'){
+                Emit(co, OP_DIV);
+            }
+            break;
+        }
+        case AST_ComparisonExpression: {
+            BinaryExpression expression = *(BinaryExpression*)statement;
+
+            Gen(co, (Statement*)expression.left);
+            Gen(co, (Statement*)expression.right);
+                Emit(co, OP_CMP);
+                Emit(co, OP_CMP_GREATER);
+            if(expression.operator[0] == '>'){
+                Emit(co, OP_CMP);
+                Emit(co, OP_CMP_GREATER);
+            }
+            else if(expression.operator[0] == '<'){
+                Emit(co, OP_CMP);
+                Emit(co, OP_CMP_LOWER);
+            }
+            else if(expression.operator[0] == '=' 
+                 && expression.operator[0] == '='){
+                Emit(co, OP_CMP);
+                Emit(co, OP_CMP_EQUALS);
+            }
+            else if(expression.operator[0] == '>' 
+                 && expression.operator[0] == '='){
+                Emit(co, OP_CMP);
+                Emit(co, OP_CMP_GREATER_EQUALS);
+            }
+            else if(expression.operator[0] == '<' 
+                 && expression.operator[0] == '='){
+                Emit(co, OP_CMP);
+                Emit(co, OP_CMP_LOWER_EQUALS);
             }
 
+            else if(expression.operator[0] == '!' 
+                 && expression.operator[0] == '='){
+                Emit(co, OP_CMP);
+                Emit(co, OP_CMP_NOT_EQUALS);
+            }
+            break;
+        }
+        case AST_IfStatement: {
+            IfStatement expression = *(IfStatement*)statement;
+
+            Gen(co, (Statement*)expression.test); // Emit test
+            Emit(co, OP_JMP_IF_FALSE); 
+
+            Emit(co, 0); // Two bytes for alternate address
+            Emit(co, 0);
+            size_t else_jmp_address = Get_Offset(co) - 2;
+
+            Gen(co, (Statement*)expression.consequent); // Emit consequent
+            Emit(co, OP_JMP); 
+
+            Emit(co, 0); // Two bytes for end address
+            Emit(co, 0);
+            size_t end_address = Get_Offset(co) - 2;
+
+            // Patch else branch address
+            size_t else_branch_address = Get_Offset(co);
+            Patch_Jump_Address(co, else_jmp_address, else_branch_address);
+
+            if(expression.alternate != NULL){
+                Gen(co, (Statement*)expression.alternate); // Emit alternate if present
+            }
+            // else{
+            //     // TODO: NULL if no alternate branch
+            //     co->constants[co->constants_last] = NUMBER(-999);
+            //     Emit(co, OP_CONST);
+            //     Emit(co, co->constants_last);
+            //     co->constants_last++;
+            // }
+
+            // Patch end of "if" address
+            size_t end_branch_address = Get_Offset(co);
+            Patch_Jump_Address(co, end_address, end_branch_address);
+
+            break;
+        }
+        case AST_BlockStatement:{
+                BlockStatement st = *(BlockStatement*)statement;
+
+                SSNode* current_node = statement->block_statement.body->first;
+                while (current_node != NULL)
+                {
+                    Gen(co, current_node->value);
+                    current_node = current_node->next;
+                }
             break;
         }
         case AST_NumericLiteral: {
@@ -64,12 +144,48 @@ void Gen(CodeObject* co, Statement* statement){
             co->constants_last++;
             break;
         }
-    default:
-        break;
+        case AST_Identifier: {
+            Identifier identifier = *(Identifier*)statement;
+            if(strncmp (identifier.name.start,"true", identifier.name.length) == 0){
+                co->constants[co->constants_last] = BOOLEAN(true);
+                Emit(co, OP_CONST);
+                Emit(co, co->constants_last);
+                co->constants_last++;
+            }
+            else if(strncmp (identifier.name.start,"false", identifier.name.length) == 0){
+                co->constants[co->constants_last] = BOOLEAN(false);
+                Emit(co, OP_CONST);
+                Emit(co, co->constants_last);
+                co->constants_last++;
+            }
+            else{
+                // TODO: Handle variables
+            }
+            break;
+        }
+        default: {
+            printf("\033[0;31mCompiler error: Unknown AST node \033[0m\n");
+            exit(0);
+            break;
+        }
+
     }
 }
 
 
+
+size_t Get_Offset(CodeObject* co){
+    return co->code_last;
+}
+
+void Write_Byte_At_Offset(CodeObject* co, size_t offset, uint8_t value){
+    co->code[offset] = value;
+}
+
+void Patch_Jump_Address(CodeObject* co, size_t offset, uint16_t value){ // uint16 for two byte address
+    Write_Byte_At_Offset(co, offset, (value >> 8) & 0xff);
+    Write_Byte_At_Offset(co, offset + 1, (value) & 0xff);
+}
 
 void Emit(CodeObject* co, uint8_t code){
     co->code[co->code_last] = code;
