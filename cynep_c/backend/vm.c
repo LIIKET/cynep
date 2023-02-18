@@ -184,10 +184,9 @@ RuntimeValue VM_Eval(VM* vm, CodeObject* co){
         switch (opcode)
         {
             case OP_HALT:{
-                    int64 t2 = timestamp();
-
-    printf("Execution time: %d ms\n", t2/1000-t1/1000);
-    printf("\n");
+                int64 t2 = timestamp();
+                printf("Execution time: %d ms\n", t2/1000-t1/1000);
+                
                 return VM_Stack_Pop(vm);
             }     
 
