@@ -216,14 +216,14 @@ void Write_Address_At_Offset(CodeObject* co, size_t offset, uint64_t value){
     uint8_t byte7 = (value >> 8 ) & 0xFFFFFFFFFFFFFFFF; 
     uint8_t byte8 = (value      ) & 0xFFFFFFFFFFFFFFFF;
 
-    Write_Byte_At_Offset(co, offset,     byte1);
-    Write_Byte_At_Offset(co, offset + 1, byte2);
-    Write_Byte_At_Offset(co, offset + 2, byte3);
-    Write_Byte_At_Offset(co, offset + 3, byte4);
-    Write_Byte_At_Offset(co, offset + 4, byte5);
-    Write_Byte_At_Offset(co, offset + 5, byte6);
-    Write_Byte_At_Offset(co, offset + 6, byte7);
-    Write_Byte_At_Offset(co, offset + 7, byte8);
+    Write_Byte_At_Offset(co, offset + 7, byte1);
+    Write_Byte_At_Offset(co, offset + 6, byte2);
+    Write_Byte_At_Offset(co, offset + 5, byte3);
+    Write_Byte_At_Offset(co, offset + 4, byte4);
+    Write_Byte_At_Offset(co, offset + 3, byte5);
+    Write_Byte_At_Offset(co, offset + 2, byte6);
+    Write_Byte_At_Offset(co, offset + 1, byte7);
+    Write_Byte_At_Offset(co, offset + 0, byte8);
 }
 
 void Emit(CodeObject* co, uint8_t code){
@@ -242,14 +242,14 @@ void Emit64(CodeObject* co, uint64_t value){
     uint8_t byte7 = (value >> 8 ) & 0xFFFFFFFFFFFFFFFF; 
     uint8_t byte8 = (value      ) & 0xFFFFFFFFFFFFFFFF;
 
-    co->code[co->code_last    ] = byte1;
-    co->code[co->code_last + 1] = byte2;
-    co->code[co->code_last + 2] = byte3;
-    co->code[co->code_last + 3] = byte4;
-    co->code[co->code_last + 4] = byte5;
-    co->code[co->code_last + 5] = byte6;
-    co->code[co->code_last + 6] = byte7;
-    co->code[co->code_last + 7] = byte8;
+    co->code[co->code_last + 7] = byte1;
+    co->code[co->code_last + 6] = byte2;
+    co->code[co->code_last + 5] = byte3;
+    co->code[co->code_last + 4] = byte4;
+    co->code[co->code_last + 3] = byte5;
+    co->code[co->code_last + 2] = byte6;
+    co->code[co->code_last + 1] = byte7;
+    co->code[co->code_last + 0] = byte8;
 
     co->code_last += 8;
 }

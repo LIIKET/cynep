@@ -280,18 +280,11 @@ RuntimeValue VM_Eval(VM* vm, CodeObject* co){
 
 // Reads 64 bit address
 uint64_t VM_Read_Address(VM* vm){ 
+    uint64_t test;
+    memcpy( &test, &vm->ip[0], sizeof( uint64_t ) );
     vm->ip += 8;
 
-    uint64_t res = vm->ip[-8];
-    res = (res << 8) | vm->ip[-7];
-    res = (res << 8) | vm->ip[-6];
-    res = (res << 8) | vm->ip[-5];
-    res = (res << 8) | vm->ip[-4];
-    res = (res << 8) | vm->ip[-3];
-    res = (res << 8) | vm->ip[-2];
-    res = (res << 8) | vm->ip[-1];
-
-    return res;
+    return test;
 }
 
 uint8_t VM_Read_Byte(VM* vm){
