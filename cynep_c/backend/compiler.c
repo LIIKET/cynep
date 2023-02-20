@@ -52,34 +52,36 @@ void Gen(CodeObject* co, Statement* statement){
             Gen(co, (Statement*)expression.left);
             Gen(co, (Statement*)expression.right);
 
-            if(expression.operator[0] == '>'){
+            if(expression.operator[0] == '>'
+            && expression.operator[1] == NULL_CHAR){
                 Emit(co, OP_CMP);
-                Emit(co, OP_CMP_GREATER);
+                Emit(co, OP_CMP_GT);
             }
-            else if(expression.operator[0] == '<'){
+            else if(expression.operator[0] == '<'
+            && expression.operator[1] == NULL_CHAR){
                 Emit(co, OP_CMP);
-                Emit(co, OP_CMP_LOWER);
+                Emit(co, OP_CMP_LT);
             }
             else if(expression.operator[0] == '=' 
-                 && expression.operator[0] == '='){
+                 && expression.operator[1] == '='){
                 Emit(co, OP_CMP);
-                Emit(co, OP_CMP_EQUALS);
+                Emit(co, OP_CMP_EQ);
             }
             else if(expression.operator[0] == '>' 
-                 && expression.operator[0] == '='){
+                 && expression.operator[1] == '='){
                 Emit(co, OP_CMP);
-                Emit(co, OP_CMP_GREATER_EQUALS);
+                Emit(co, OP_CMP_GE);
             }
             else if(expression.operator[0] == '<' 
-                 && expression.operator[0] == '='){
+                 && expression.operator[1] == '='){
                 Emit(co, OP_CMP);
-                Emit(co, OP_CMP_LOWER_EQUALS);
+                Emit(co, OP_CMP_LE);
             }
 
             else if(expression.operator[0] == '!' 
-                 && expression.operator[0] == '='){
+                 && expression.operator[1] == '='){
                 Emit(co, OP_CMP);
-                Emit(co, OP_CMP_NOT_EQUALS);
+                Emit(co, OP_CMP_NE);
             }
             break;
         }
@@ -108,9 +110,9 @@ void Gen(CodeObject* co, Statement* statement){
             }
             else{
                 //TODO: NULL if no alternate branch
-                Emit(co, OP_CONST);
-                size_t index = Numeric_Const_Index(co, -999);
-                Emit64(co, index);
+                // Emit(co, OP_CONST);
+                // size_t index = Numeric_Const_Index(co, -999);
+                // Emit64(co, index);
             }
 
             // Patch end of "if" address
@@ -206,24 +208,7 @@ void Write_Byte_At_Offset(CodeObject* co, size_t offset, uint8_t value){
 
 // Writes 64 bit
 void Write_Address_At_Offset(CodeObject* co, size_t offset, uint64_t value){
-
-    uint8_t byte1 = (value >> 56) & 0xFFFFFFFFFFFFFFFF; 
-    uint8_t byte2 = (value >> 48) & 0xFFFFFFFFFFFFFFFF; 
-    uint8_t byte3 = (value >> 40) & 0xFFFFFFFFFFFFFFFF; 
-    uint8_t byte4 = (value >> 32) & 0xFFFFFFFFFFFFFFFF; 
-    uint8_t byte5 = (value >> 24) & 0xFFFFFFFFFFFFFFFF; 
-    uint8_t byte6 = (value >> 16) & 0xFFFFFFFFFFFFFFFF; 
-    uint8_t byte7 = (value >> 8 ) & 0xFFFFFFFFFFFFFFFF; 
-    uint8_t byte8 = (value      ) & 0xFFFFFFFFFFFFFFFF;
-
-    Write_Byte_At_Offset(co, offset + 7, byte1);
-    Write_Byte_At_Offset(co, offset + 6, byte2);
-    Write_Byte_At_Offset(co, offset + 5, byte3);
-    Write_Byte_At_Offset(co, offset + 4, byte4);
-    Write_Byte_At_Offset(co, offset + 3, byte5);
-    Write_Byte_At_Offset(co, offset + 2, byte6);
-    Write_Byte_At_Offset(co, offset + 1, byte7);
-    Write_Byte_At_Offset(co, offset + 0, byte8);
+    memcpy(&co->code[offset], &value, sizeof( uint64_t ));
 }
 
 void Emit(CodeObject* co, uint8_t code){
@@ -232,24 +217,102 @@ void Emit(CodeObject* co, uint8_t code){
 }
 
 void Emit64(CodeObject* co, uint64_t value){
-
-    uint8_t byte1 = (value >> 56) & 0xFFFFFFFFFFFFFFFF; 
-    uint8_t byte2 = (value >> 48) & 0xFFFFFFFFFFFFFFFF; 
-    uint8_t byte3 = (value >> 40) & 0xFFFFFFFFFFFFFFFF; 
-    uint8_t byte4 = (value >> 32) & 0xFFFFFFFFFFFFFFFF; 
-    uint8_t byte5 = (value >> 24) & 0xFFFFFFFFFFFFFFFF; 
-    uint8_t byte6 = (value >> 16) & 0xFFFFFFFFFFFFFFFF; 
-    uint8_t byte7 = (value >> 8 ) & 0xFFFFFFFFFFFFFFFF; 
-    uint8_t byte8 = (value      ) & 0xFFFFFFFFFFFFFFFF;
-
-    co->code[co->code_last + 7] = byte1;
-    co->code[co->code_last + 6] = byte2;
-    co->code[co->code_last + 5] = byte3;
-    co->code[co->code_last + 4] = byte4;
-    co->code[co->code_last + 3] = byte5;
-    co->code[co->code_last + 2] = byte6;
-    co->code[co->code_last + 1] = byte7;
-    co->code[co->code_last + 0] = byte8;
-
+    memcpy(&co->code[co->code_last + 0], &value, sizeof( uint64_t ));
     co->code_last += 8;
+}
+
+// char* opcodeToString(uint8_t opcode){
+//     // #define OP_HALT             0x00
+//     // #define OP_CONST            0x01
+//     // #define OP_ADD              0x02
+//     // #define OP_SUB              0x03
+//     // #define OP_MUL              0x04
+//     // #define OP_DIV              0x05
+//     // #define OP_CMP              0x06
+//     // #define OP_JMP_IF_FALSE     0x07
+//     // #define OP_JMP              0x08
+//     // #define OP_POP              0x09
+
+//     switch (expression)
+//     {
+//     case OP_HALT:
+//         /* code */
+//         break;
+    
+//     default:
+//         break;
+//     }
+// }
+
+char* opcodeToString(uint8_t opcode){
+    switch (opcode)
+    {
+        case OP_HALT: return "HALT";
+        case OP_CONST: return "CONST";
+        case OP_ADD: return "ADD";
+        case OP_SUB: return "SUB";
+        case OP_MUL: return "MUL";
+        case OP_DIV: return "DIV";
+        case OP_CMP: return "CMP";
+        case OP_JMP_IF_FALSE: return "JMP_IF_FALSE";
+        case OP_JMP: return "JMP";
+        case OP_POP: return "POP";
+        default: return "NOT IMPLEMENTED";
+    }
+}
+
+char* cmpCodeToString(uint8_t cmpcode){
+    switch (cmpcode)
+    {
+        case OP_CMP_GT: return "GT";
+        case OP_CMP_LT: return "LT";
+        case OP_CMP_EQ: return "EQ";
+        case OP_CMP_GE: return "GE";
+        case OP_CMP_LE: return "LE";
+        case OP_CMP_NE: return "NE";
+        default: return "NOT IMPLEMENTED";
+    }
+}
+
+void Disassemble(CodeObject* co){
+    size_t offset = 0;
+    while(offset < co->code_last){
+        uint8_t opcode = co->code[offset];
+        uint64_t args = co->code[offset + 1];
+        uint8_t small_args = co->code[offset + 1];
+
+        char* opcode_string = opcodeToString(opcode);
+
+        printf("0x%04X", offset);
+        printf("%-10s", "\t");
+        printf("%-20s", opcode_string);
+
+        if(opcode == OP_CONST){
+            printf("0x%04X", args);
+            printf(" (%s)", RuntimeValueToString(co->constants[args]));
+            offset += 8;
+        }
+
+        if(opcode == OP_CMP){
+            printf("0x%01X", small_args);
+            printf("%-4s", " ");
+            printf("(%s)", cmpCodeToString(small_args));    
+            offset += 1;
+        }
+
+        if(opcode == OP_JMP){
+            printf("0x%04X", args);
+            offset += 8;
+        }
+
+        if(opcode == OP_JMP_IF_FALSE){
+            printf("0x%04X", args);
+            offset += 8;
+        }
+
+        offset++;
+        printf("\n");
+    }
+
+    printf("\n");
 }

@@ -47,11 +47,14 @@ int main(int argc, char**argv) {
     printf("Total: %d ms\n", t2/1000-t1/1000);
 
 
-    // if (argc > 1 && strcmp(argv[1], "-tree") == 0 || true) { //|| true
-    //     PrettyPrint((Statement*)program, "", true);
-    // }
+    if (argc > 1 && strcmp(argv[1], "-ast") == 0) { //|| true
+        printf("\n");
+        PrettyPrint((Statement*)program, "", true);
+    }
     printf("\n");
 
+ 
+    Disassemble(&codeObject);
 
 
     VM virtualMachine;
@@ -59,20 +62,20 @@ int main(int argc, char**argv) {
 
 
 
-    printf("\nExecution result: %s", RuntimeValueToString(result));
+    printf("Execution result: %s", RuntimeValueToString(result));
 
 
 
-    printf("\n");
-    int64 tesr1 = timestamp();
-    int a = 0;
-    for (size_t i = 0; i < 1000000; i++)
-    {
-        if(50 > 10){
-            a++;
-        }
-    }
+    // printf("\n");
+    // int64 tesr1 = timestamp();
+    // int a = 0;
+    // for (size_t i = 0; i < 1000000; i++)
+    // {
+    //     if(50 > 10){
+    //         a++;
+    //     }
+    // }
     
-    int64 tesr2 = timestamp();
-    printf("C Execution time: %d ms\n", tesr2/1000-tesr1/1000);
+    // int64 tesr2 = timestamp();
+    // printf("C Execution time: %d ms\n", tesr2/1000-tesr1/1000);
 }

@@ -12,12 +12,12 @@
 #define OP_POP              0x09
 
 // Comparisons
-#define OP_CMP_GREATER          0x01
-#define OP_CMP_LOWER            0x02
-#define OP_CMP_EQUALS           0x03
-#define OP_CMP_GREATER_EQUALS   0x04
-#define OP_CMP_LOWER_EQUALS     0x05
-#define OP_CMP_NOT_EQUALS       0x06
+#define OP_CMP_GT           0x01
+#define OP_CMP_LT           0x02
+#define OP_CMP_EQ           0x03
+#define OP_CMP_GE           0x04
+#define OP_CMP_LE           0x05
+#define OP_CMP_NE           0x06
 
 typedef struct VM VM;
 typedef struct RuntimeValue RuntimeValue;
@@ -218,22 +218,22 @@ RuntimeValue VM_Eval(VM* vm, CodeObject* co){
                     bool res;
                     switch (cmp_type)
                     {
-                    case OP_CMP_GREATER:
+                    case OP_CMP_GT:
                         res = op1.number > op2.number;
                         break;
-                    case OP_CMP_LOWER:
+                    case OP_CMP_LT:
                         res = op1.number < op2.number;
                         break;
-                    case OP_CMP_EQUALS:
+                    case OP_CMP_EQ:
                         res = op1.number == op2.number;
                         break;
-                    case OP_CMP_GREATER_EQUALS:
+                    case OP_CMP_GE:
                         res = op1.number >= op2.number;
                         break;
-                    case OP_CMP_LOWER_EQUALS:
+                    case OP_CMP_LE:
                         res = op1.number <= op2.number;
                         break;
-                    case OP_CMP_NOT_EQUALS:
+                    case OP_CMP_NE:
                         res = op1.number != op2.number;
                         break;
                     default:
@@ -278,13 +278,14 @@ RuntimeValue VM_Eval(VM* vm, CodeObject* co){
     int a = 0;
 }
 
-// Reads 64 bit address
+// Reads 64 bit address.
 uint64_t VM_Read_Address(VM* vm){ 
-    uint64_t test;
-    memcpy( &test, &vm->ip[0], sizeof( uint64_t ) );
+    uint64_t result;
+    memcpy(&result, vm->ip, sizeof( uint64_t ));
+
     vm->ip += 8;
 
-    return test;
+    return result;
 }
 
 uint8_t VM_Read_Byte(VM* vm){
