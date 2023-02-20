@@ -147,10 +147,21 @@ IfStatement* Parse_IfStatement()
         consequtive = (Statement*)Parse_BlockStatement();
     }
     else{
-        // TODO: Parse single statement. Fuck this for now.
+        // TODO: Parse single expression. Fuck this for now.
     }
 
-    return Create_IfStatement((Statement*)Seed_Memory(), test, consequtive);
+    Statement* alternate = NULL;
+    if(Current().type == Token_Else){
+        Consume();
+        if(Current().type == Token_OpenBrace){
+            alternate = (Statement*)Parse_BlockStatement();
+        }
+        else{
+            // TODO: Parse single expression. Fuck this for now.
+        }
+    }
+
+    return Create_IfStatement((Statement*)Seed_Memory(), test, consequtive, alternate);
 }
 
 BlockStatement* Parse_BlockStatement(){
@@ -219,7 +230,7 @@ Expression* Parse_Expression()
 
 // AssignmentExpression         [X]
 // Object
-// LogicalExpression                
+// LogicalExpression (and, or)                
 // ComparisonExpression         [X]
 // AdditiveExpression           [X]
 // MiltiplicativeExpression     [X]

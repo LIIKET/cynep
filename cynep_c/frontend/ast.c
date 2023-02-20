@@ -218,12 +218,12 @@ ComparisonExpression* Create_ComparisonExpression(Statement* memory, Expression*
     return (ComparisonExpression*)memory;
 }
 
-IfStatement* Create_IfStatement(Statement* memory, ComparisonExpression* test, Statement* consequent)
+IfStatement* Create_IfStatement(Statement* memory, ComparisonExpression* test, Statement* consequent, Statement* alternate)
 {
     memory->type = AST_IfStatement;
     memory->ifStatement.test = test;
     memory->ifStatement.consequent = consequent;
-    memory->ifStatement.alternate = NULL;
+    memory->ifStatement.alternate = alternate;
 
     return (IfStatement*)memory;
 }

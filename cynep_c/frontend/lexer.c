@@ -15,6 +15,7 @@ enum TokenType
     Token_Null,
     Token_Type,
     Token_If,
+    Token_Else,
 
     // Operators
     Token_ComparisonOperator,
@@ -241,6 +242,10 @@ Token* lexer_tokenize(SourceFile* file)
                     else if(strncmp(current, "if", length) == 0)
                     {
                         Token_Create(&tokens[tokens_count++], Token_If, current, length); 
+                    }
+                    else if(strncmp(current, "else", length) == 0)
+                    {
+                        Token_Create(&tokens[tokens_count++], Token_Else, current, length); 
                     }
                     else
                     {

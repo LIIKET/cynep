@@ -48,12 +48,12 @@ int main(int argc, char**argv) {
 
 
     if (argc > 1 && strcmp(argv[1], "-ast") == 0) { //|| true
-        printf("\n");
+        printf("\n---------------- ABSTRACT SYNTAX TREE ----------------\n\n");
         PrettyPrint((Statement*)program, "", true);
     }
     printf("\n");
 
- 
+    printf("\n------------------ MAIN DISASSEMBLY ------------------\n\n");
     Disassemble(&codeObject);
 
 
