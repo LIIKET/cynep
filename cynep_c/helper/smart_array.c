@@ -1,33 +1,36 @@
 #pragma once
 
-typedef struct smart_array_t {
-    void* array;
+typedef struct DynArray {
+    uint8_t* array;
     size_t used;
     size_t size;
-    size_t _segment_bytes;
-} smart_array_t;
+    size_t segment_size;
+} DynArray;
 
-smart_array_t array_create(size_t initial_size, size_t segment_bytes) {
-    smart_array_t arr;
-    arr.array = (void*)malloc(initial_size * segment_bytes);
+DynArray DynArray_Create(size_t initial_size, size_t segment_size) {
+    DynArray arr;
+    arr.array = malloc(initial_size * segment_size);
     arr.used = 0;
     arr.size = initial_size;
+    arr.segment_size = segment_size;
 
     return arr;
 }
 
-void _array_resize_if_tapped(smart_array_t *arr) {
+void DynArray_Resize(DynArray *arr) {
     if (arr->used == arr->size) {
         arr->size *= 2;
-        arr->array = (char*)realloc(arr->array, arr->size * arr->_segment_bytes);
+        arr->array = (char*)realloc(arr->array, arr->size * arr->segment_size);
     }
 }
 
-// void array_append(smart_array_t *arr, void* element) {
-//     _array_resize_if_tapped(arr);
+void DynArray_Append(DynArray *arr, void* element) {
+    DynArray_Resize(arr);
 
-//     arr->array[arr->used++] = element;
-// }
+    memcpy(&arr->array[arr->used * arr->segment_size], element, arr->segment_size);
+    // arr->array[arr->used++] = element;
+    arr->used = 1;
+}
 
 // size_t array_count(array_t *arr) {
 //     return arr->used;

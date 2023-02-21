@@ -13,11 +13,11 @@ TypeDeclaration*        Parse_TypeDeclaration();
 Expression*             Parse_AssignmentExpression();
 Expression*             Parse_PrimaryExpression();
 
-Expression* Parse_ComparisonExpression();
+Expression*             Parse_ComparisonExpression();
 Expression*             Parse_AdditiveExpression();
 Expression*             Parse_MultiplicativeExpression();
-IfStatement* Parse_IfStatement();
-BlockStatement* Parse_BlockStatement();
+IfStatement*            Parse_IfStatement();
+BlockStatement*         Parse_BlockStatement();
 
 //
 // Globals
@@ -26,11 +26,11 @@ BlockStatement* Parse_BlockStatement();
 Token* _tokens = NULL;
 size_t _current_index = 0;
 
-size_t nodes_max = 10000000; 
+size_t nodes_max = 10000000; // TODO: DANGER! Handle memory! 
 size_t nodes_count = 0;
 Statement* nodes = NULL;
 
-size_t list_nodes_max = 10000000; 
+size_t list_nodes_max = 10000000; // TODO: DANGER! Handle memory! 
 size_t list_nodes_count = 0;
 SSNode* list_nodes = NULL;
 
@@ -192,6 +192,7 @@ VariableDeclaration* Parse_VariableDeclaration()
     else{
         ConsumeExpect(Token_Assignment, "Identifier in var declaration should be followed by an equals token.");
         Expression* expression = Parse_Expression();
+        
         ConsumeExpect(Token_Semicolon, "Variable declaration must end with semicolon.");
         return Create_VariableDeclaration((Statement*)Seed_Memory(), identifier.string_value, expression);
     }

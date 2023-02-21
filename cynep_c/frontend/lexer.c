@@ -80,10 +80,9 @@ Token* lexer_tokenize(SourceFile* file)
     char* file_buffer = file->buffer;
     int64 t1 = timestamp();
 
-    // TODO: Should predict a good size based on characters in document
-    // Maybe just allocate as if every character is a token?
+    // Just allocate as if every character is a token?
     // Kind of wasteful but then we would never have to reallocate.
-    size_t tokens_max = 10000000; 
+    size_t tokens_max = file->length;
     size_t tokens_count = 0;
 
     size_t iterator = 0;
@@ -264,6 +263,8 @@ Token* lexer_tokenize(SourceFile* file)
             }
         }
 
+        // Resize array if out of memory
+        // Not needed as long as we size array based on file length
         // if(tokens_count == tokens_max)
         // {
         //     tokens_max *= 2;

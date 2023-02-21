@@ -9,6 +9,7 @@
         "xtr1common": "c",
         "time.h": "c",
         "stdlib.h": "c",
-        "pthread.h": "c"
+        "pthread.h": "c",
+        "typeinfo": "c"
     }
 }

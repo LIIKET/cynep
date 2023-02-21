@@ -332,9 +332,7 @@ SSList* Get_Children(Statement* expression)
                 SSNode* right_node = SSNode_Create(malloc(sizeof(SSNode)), node->alternate);
                 SSList_Append(list, right_node);
             }
-
-
-
+            
             break;
         }
         case AST_MemberExpression:

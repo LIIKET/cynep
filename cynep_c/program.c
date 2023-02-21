@@ -16,8 +16,10 @@
 #include "frontend/ast.c"
 #include "frontend/parser.c"
 
+
 #include "backend/vm.c"
 #include "backend/compiler.c"
+
 
 void *parseTask(void *vargp)
 {
@@ -26,6 +28,14 @@ void *parseTask(void *vargp)
 }
 
 int main(int argc, char**argv) {
+    // DynArray arr = DynArray_Create(1, sizeof(uint64_t));
+    // uint64_t val = 5;
+    // uint64_t val2 = 10;
+    // DynArray_Append(&arr, &val);
+    // DynArray_Append(&arr, &val2);
+    // uint64_t test = arr.array[1 * arr.segment_size];
+
+
     int64 t1 = timestamp();
 
     // pthread_t thread1;
@@ -36,9 +46,19 @@ int main(int argc, char**argv) {
     Token* tokens = lexer_tokenize(file);
     Statement* program = Build_SyntaxTree(tokens);
 
+    // if (argc > 1 && strcmp(argv[1], "-ast") == 0|| true) { //|| true
+    //     printf("\n---------------- ABSTRACT SYNTAX TREE ----------------\n\n");
+    //     PrettyPrint((Statement*)program, "", true);
+    // }
+    // printf("\n");
+
     int64 te1 = timestamp();
 
-    CodeObject codeObject = Compile((Statement*)program);
+    Global* global = Create_Global();
+    Global_Add(global, "leet", 1337);
+    Global_Add(global, "y", 7331);
+
+    CodeObject codeObject = Compile((Statement*)program, global);
 
     int64 te2 = timestamp();
     printf("Compiling: %d ms\n", te2/1000-te1/1000);
@@ -47,18 +67,14 @@ int main(int argc, char**argv) {
     printf("Total: %d ms\n", t2/1000-t1/1000);
 
 
-    if (argc > 1 && strcmp(argv[1], "-ast") == 0) { //|| true
-        printf("\n---------------- ABSTRACT SYNTAX TREE ----------------\n\n");
-        PrettyPrint((Statement*)program, "", true);
-    }
-    printf("\n");
 
-    printf("\n------------------ MAIN DISASSEMBLY ------------------\n\n");
-    Disassemble(&codeObject);
+
+    // printf("\n------------------ MAIN DISASSEMBLY ------------------\n\n");
+    // Disassemble(&codeObject, global);
 
 
     VM virtualMachine;
-    RuntimeValue result = VM_exec(&virtualMachine, &codeObject);
+    RuntimeValue result = VM_exec(&virtualMachine, global, &codeObject);
 
 
 

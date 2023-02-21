@@ -10,6 +10,8 @@
 #define OP_JMP_IF_FALSE     0x07
 #define OP_JMP              0x08
 #define OP_POP              0x09
+#define OP_GET_GLOBAL       0x10
+#define OP_SET_GLOBAL       0x11
 
 // Comparisons
 #define OP_CMP_GT           0x01
@@ -27,25 +29,29 @@ typedef struct Object Object;
 typedef struct StringObject StringObject;
 typedef struct CodeObject CodeObject;
 
-RuntimeValue VM_Eval(VM* vm, CodeObject* codeObject);
+typedef struct GlobalVar GlobalVar;
+typedef struct Global Global;
+
+RuntimeValue VM_Eval(VM* vm, CodeObject* co, Global* global);
 uint8_t VM_Read_Byte(VM* vm);
 RuntimeValue VM_Stack_Pop(VM* vm);
 void VM_Stack_Push(VM* vm, RuntimeValue* value);
 uint64_t VM_Read_Address(VM* vm);
 uint8_t VM_Peek_Byte(VM* vm);
+RuntimeValue VM_Stack_Peek(VM* vm, size_t offset);
 
-enum ValueType{
+enum ValueType {
     ValuteType_Number,
     ValueType_Boolean,
     ValueType_Object
 };
 
-enum ObjectType{
+enum ObjectType {
     ObjectType_String,
     ObjectType_Code
 };
 
-struct RuntimeValue{
+struct RuntimeValue {
     ValueType type;
     union
     {
@@ -55,19 +61,17 @@ struct RuntimeValue{
     };
 };
 
-struct Object{
+struct Object {
     ObjectType objectType;
 };
 
-struct StringObject
-{
+struct StringObject {
     Object object;
     char* string;
     size_t length;
 };
 
-struct CodeObject
-{
+struct CodeObject {
     Object object;
     char* name;
     size_t name_length;
@@ -77,6 +81,8 @@ struct CodeObject
     uint64_t constants_last;
 };
 
+
+
 #define NUMBER(value) (RuntimeValue){.type = ValuteType_Number, .number = value}
 #define BOOLEAN(value) (RuntimeValue){.type = ValueType_Boolean, .boolean = value}
 
@@ -84,6 +90,92 @@ struct CodeObject
 #define AS_CODE(value) (*(CodeObject*)value.object)
 #define AS_NUMBER(value) (*(float64*)value.number)
 #define AS_BOOLEAN(value) (*(bool*)value.boolean)
+
+// GLOBAL
+struct GlobalVar {
+    char* name;
+    RuntimeValue value;
+};
+
+struct Global {
+    GlobalVar* globals;
+    int64 globals_size;
+    int64 globals_max;
+};
+
+GlobalVar Global_Get(Global* global, int64 index){
+    return global->globals[index];
+}
+
+void Global_Set(Global* global, int64 index, RuntimeValue* value){
+    if(index >= global->globals_size){
+        printf("\033[0;31mVM Error. Global index %n does not exist.\033[0m\n", index);
+        exit(0);
+    }
+
+    global->globals[index].value = *value;
+}
+
+int64 Global_GetIndex(Global* global, char* name){
+    if(global->globals_size > 1){
+        for(int64 i = global->globals_size - 1; i >= 0; i--){
+            if(strcmp(global->globals[i].name, name) == 0){
+                return i;
+            }
+        }
+    }
+
+    return -1;
+}
+
+int64 Global_GetIndexBufferString(Global* global, BufferString* name){
+    if(global->globals_size > 1){
+        for(int64 i = global->globals_size - 1; i >= 0; i--){
+            if(strncmp(global->globals[i].name, name->start, name->length) == 0){
+                return i;
+            }
+        }
+    }
+
+    return -1;
+}
+
+void Global_Define(Global* global, BufferString* name){
+    int64 index = Global_GetIndexBufferString(global, name);
+
+    if(index != -1){
+        return;
+    }
+
+    GlobalVar* var = &global->globals[global->globals_size++];
+    var->name = malloc(sizeof(char) * name->length + 1);
+    strncpy(var->name, name->start, name->length);
+    var->name[name->length] = NULL_CHAR;
+    var->value = NUMBER(0); // TODO: Set to null
+}
+
+void Global_Add(Global* global, char* name, float64 value){
+    if(Global_GetIndex(global, name) != -1){
+        return;
+    }
+
+    GlobalVar* var = &global->globals[global->globals_size];
+    var->name = name;
+    var->value = NUMBER(value);
+
+    global->globals_size++;
+}
+
+Global* Create_Global(){
+    Global* global = malloc(sizeof(Global));
+    global->globals = malloc(sizeof(GlobalVar) * 10); // TODO: DANGER! Handle memory when adding
+    global->globals_max = 10;
+    global->globals_size = 0;
+}
+
+// END GLOBAL
+
+
 
 #define DEBUG_BUFFSIZE 100
 char* RuntimeValueToString(RuntimeValue value){
@@ -147,6 +239,7 @@ RuntimeValue ALLOC_CODE(char* name, size_t length){
 struct VM 
 {
     uint8_t* ip; // Instruction pointer
+    Global* global;
 
     RuntimeValue* stack; // Array of values
     RuntimeValue* stack_start; // First address of stack
@@ -154,8 +247,9 @@ struct VM
     RuntimeValue* sp; // Stack pointer
 };
 
-RuntimeValue VM_exec(VM* vm, CodeObject* codeObject){
+RuntimeValue VM_exec(VM* vm, Global* global, CodeObject* codeObject){
 
+    vm->global = global;
     vm->stack = malloc(sizeof(RuntimeValue) * STACK_LIMIT);
     vm->stack_start = vm->stack;
     vm->stack_end = vm->stack_start + sizeof(RuntimeValue) * STACK_LIMIT;
@@ -164,7 +258,7 @@ RuntimeValue VM_exec(VM* vm, CodeObject* codeObject){
     vm->ip = &codeObject->code[0];
     vm->sp = &vm->stack[0];
 
-    return VM_Eval(vm, codeObject);
+    return VM_Eval(vm, codeObject, global);
 }
 
 #define BINARY_OP(operation)                    \
@@ -175,7 +269,7 @@ RuntimeValue VM_exec(VM* vm, CodeObject* codeObject){
         VM_Stack_Push(vm, &NUMBER(result));     \
     } while (false)                             \
 
-RuntimeValue VM_Eval(VM* vm, CodeObject* co){
+RuntimeValue VM_Eval(VM* vm, CodeObject* co, Global* global){
     int64 t1 = timestamp();
 
     while(true){
@@ -265,6 +359,22 @@ RuntimeValue VM_Eval(VM* vm, CodeObject* co){
                 break;
             }
 
+            case OP_GET_GLOBAL:{
+                int64 address = VM_Read_Address(vm);
+                RuntimeValue value = Global_Get(global, address).value;
+                VM_Stack_Push(vm, &value);
+
+                break;
+            }
+
+            case OP_SET_GLOBAL:{
+                int64 index = VM_Read_Address(vm);
+                RuntimeValue value = VM_Stack_Peek(vm, 0);
+                Global_Set(global, index, &value);
+
+                break;
+            }
+
             default: {
                 // printf("VM Error. Unrecognized opcode: %#x", opcode);
                 printf("\033[0;31mVM Error. Unrecognized opcode: %#x \033[0m\n", opcode);
@@ -313,5 +423,13 @@ RuntimeValue VM_Stack_Pop(VM* vm){
     }
     vm->sp--;
     return *vm->sp;
+}
+
+RuntimeValue VM_Stack_Peek(VM* vm, size_t offset){
+    if(vm->sp < vm->stack_start){
+        printf("VM: Empty stack\n");
+        exit(0); 
+    }
+    return *(vm->sp -1 - offset);
 }
 

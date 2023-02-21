@@ -1,36 +1,36 @@
 #pragma once
 
-CodeObject Compile(Statement* statement);
+CodeObject Compile(Statement* statement, Global* global);
 size_t Get_Offset(CodeObject* co);
-void Gen(CodeObject* co, Statement* statement);
+void Gen(CodeObject* co, Statement* statement, Global* global);
 void Emit(CodeObject* co, uint8_t code);
 void Write_Address_At_Offset(CodeObject* co, size_t offset, uint64_t value);
 void Write_Byte_At_Offset(CodeObject* co, size_t offset, uint8_t value);
 void Emit64(CodeObject* co, uint64_t value);
 size_t Numeric_Const_Index(CodeObject* co, float64 value);
 
-CodeObject Compile(Statement* statement){
+CodeObject Compile(Statement* statement, Global* global){
     CodeObject co = AS_CODE(ALLOC_CODE("main", 4));
 
     // TODO: Need a growing array for this
-    co.code = malloc(sizeof(uint8_t) * 100000000); // 100 000 000, Crashes if too many instructions
-    co.constants = malloc(sizeof(RuntimeValue) * 100000000); // 100 000 000, Crashes if too many constants
+    co.code = malloc(sizeof(uint8_t) * 100000000); // TODO: DANGER! Handle memory! 100 000 000, Crashes if too many instructions
+    co.constants = malloc(sizeof(RuntimeValue) * 100000000); // TODO: DANGER! Handle memory! 100 000 000, Crashes if too many constants
 
-    Gen(&co, statement);
+    Gen(&co, statement, global);
     
     Emit(&co, OP_HALT);
 
     return co;
 }
 
-void Gen(CodeObject* co, Statement* statement){
+void Gen(CodeObject* co, Statement* statement, Global* global){
     switch (statement->type)
     {
         case AST_BinaryExpression:{
             BinaryExpression expression = *(BinaryExpression*)statement;
 
-            Gen(co, (Statement*)expression.left);
-            Gen(co, (Statement*)expression.right);
+            Gen(co, (Statement*)expression.left, global);
+            Gen(co, (Statement*)expression.right, global);
 
             if(expression.operator[0] == '+'){
                 Emit(co, OP_ADD);
@@ -46,11 +46,12 @@ void Gen(CodeObject* co, Statement* statement){
             }
             break;
         }
+        
         case AST_ComparisonExpression: {
             BinaryExpression expression = *(BinaryExpression*)statement;
 
-            Gen(co, (Statement*)expression.left);
-            Gen(co, (Statement*)expression.right);
+            Gen(co, (Statement*)expression.left, global);
+            Gen(co, (Statement*)expression.right, global);
 
             if(expression.operator[0] == '>'
             && expression.operator[1] == NULL_CHAR){
@@ -85,16 +86,17 @@ void Gen(CodeObject* co, Statement* statement){
             }
             break;
         }
+
         case AST_IfStatement: {
             IfStatement expression = *(IfStatement*)statement;
 
-            Gen(co, (Statement*)expression.test); // Emit test
+            Gen(co, (Statement*)expression.test, global); // Emit test
             Emit(co, OP_JMP_IF_FALSE); 
 
             Emit64(co, 0); // 64 bytes for alternate address
             size_t else_jmp_address = Get_Offset(co) - 8; // 8 bytes for 64 bit
 
-            Gen(co, (Statement*)expression.consequent); // Emit consequent
+            Gen(co, (Statement*)expression.consequent, global); // Emit consequent
             Emit(co, OP_JMP); 
 
             Emit64(co, 0); // 64 bytes for end address
@@ -106,7 +108,7 @@ void Gen(CodeObject* co, Statement* statement){
 
             if(expression.alternate != NULL){
                 // Emit alternate if present
-                Gen(co, (Statement*)expression.alternate); 
+                Gen(co, (Statement*)expression.alternate, global); 
             }
             else{
                 //TODO: NULL if no alternate branch
@@ -121,13 +123,14 @@ void Gen(CodeObject* co, Statement* statement){
 
             break;
         }
+
         case AST_BlockStatement:{
             BlockStatement st = *(BlockStatement*)statement;
 
             SSNode* current_node = statement->block_statement.body->first;
             while (current_node != NULL)
             {
-                Gen(co, current_node->value);
+                Gen(co, current_node->value, global);
                 current_node = current_node->next;
 
                 // Pop if last
@@ -137,6 +140,7 @@ void Gen(CodeObject* co, Statement* statement){
             }
             break;
         }
+
         case AST_NumericLiteral: {
             NumericLiteral expression = *(NumericLiteral*)statement;
 
@@ -152,6 +156,7 @@ void Gen(CodeObject* co, Statement* statement){
 
             break;
         }
+
         case AST_Identifier: {
             Identifier identifier = *(Identifier*)statement;
             if(strncmp(identifier.name.start,"true", identifier.name.length) == 0){
@@ -169,8 +174,61 @@ void Gen(CodeObject* co, Statement* statement){
                 co->constants_last++;
             }
             else{
-                // TODO: Handle variables
+                // char* name = malloc(sizeof(char) * 10); // TODO: FIXA
+                // strncpy(name, identifier.name.start, identifier.name.length);
+                // name[identifier.name.length] = NULL_CHAR;
+                int64 index = Global_GetIndexBufferString(global, &identifier.name);
+
+                if(index == -1){
+                    printf("\033[0;31mCompiler: Reference error \033[0m\n");
+                    exit(0);
+                }
+
+                Emit(co, OP_GET_GLOBAL);
+                Emit64(co, index);
+
+                // TODO: Handle scoped variables
             }
+            break;
+        }
+
+        case AST_VariableDeclaration: {
+            VariableDeclaration variableDeclaration = *(VariableDeclaration*)statement;
+
+            Global_Define(global, &variableDeclaration.name);
+            int64 index = Global_GetIndexBufferString(global, &variableDeclaration.name);
+
+            if(variableDeclaration.value != NULL){
+                Gen(co, (Statement*)variableDeclaration.value, global);
+            }
+            else{
+                // TODO: Emit null
+                Emit(co, OP_CONST);
+                size_t index = Numeric_Const_Index(co, -999);
+                Emit64(co, index);
+            }
+
+            Emit(co, OP_SET_GLOBAL);
+            Emit64(co, index);
+            break;
+        }
+
+        case AST_AssignmentExpression: {
+            AssignmentExpression assignmentExpression = *(AssignmentExpression*)statement; 
+            Identifier* identifier = (Identifier*)assignmentExpression.assignee; // TODO: Handle expressions
+
+            int64 index = Global_GetIndexBufferString(global, &identifier->name);
+
+            if(index == -1){
+                printf("\033[0;31mCompiler: Reference error \033[0m\n");
+                exit(0);
+            }
+
+            Gen(co, (Statement*)assignmentExpression.value, global);
+
+            Emit(co, OP_SET_GLOBAL);
+            Emit64(co, index);
+
             break;
         }
         default: {
@@ -234,6 +292,8 @@ char* opcodeToString(uint8_t opcode){
         case OP_JMP_IF_FALSE: return "JMP_IF_FALSE";
         case OP_JMP: return "JMP";
         case OP_POP: return "POP";
+        case OP_GET_GLOBAL: return "GET_GLOBAL";
+        case OP_SET_GLOBAL: return "SET_GLOBAL";
         default: return "NOT IMPLEMENTED";
     }
 }
@@ -251,7 +311,7 @@ char* cmpCodeToString(uint8_t cmpcode){
     }
 }
 
-void Disassemble(CodeObject* co){
+void Disassemble(CodeObject* co, Global* global){
     size_t offset = 0;
     while(offset < co->code_last){
         uint8_t opcode = co->code[offset];
@@ -275,6 +335,18 @@ void Disassemble(CodeObject* co){
             printf("%-4s", " ");
             printf("(%s)", cmpCodeToString(small_args));    
             offset += 1;
+        }
+
+        if(opcode == OP_GET_GLOBAL){
+            printf("%-7u", args);
+            printf("(%s)", Global_Get(global, args).name);
+            offset += 8;
+        }
+
+        if(opcode == OP_SET_GLOBAL){
+            printf("%-7u", args);
+            printf("(%s)", Global_Get(global, args).name);
+            offset += 8;
         }
 
         if(opcode == OP_JMP){
