@@ -1,16 +1,16 @@
 #pragma once
 
-CodeObject Compile(Statement* statement, Global* global);
-size_t Get_Offset(CodeObject* co);
-void Gen(CodeObject* co, Statement* statement, Global* global);
-void Emit(CodeObject* co, uint8_t code);
-void Write_Address_At_Offset(CodeObject* co, size_t offset, uint64_t value);
-void Write_Byte_At_Offset(CodeObject* co, size_t offset, uint8_t value);
-void Emit64(CodeObject* co, uint64_t value);
-size_t Numeric_Const_Index(CodeObject* co, float64 value);
+CodeObject  Compile(Statement* statement, Global* global);
+size_t      Get_Offset(CodeObject* co);
+size_t      Numeric_Const_Index(CodeObject* co, float64 value);
+void        Gen(CodeObject* co, Statement* statement, Global* global);
+void        Emit(CodeObject* co, uint8_t code);
+void        Write_Address_At_Offset(CodeObject* co, size_t offset, uint64_t value);
+void        Write_Byte_At_Offset(CodeObject* co, size_t offset, uint8_t value);
+void        Emit64(CodeObject* co, uint64_t value);
 
 CodeObject Compile(Statement* statement, Global* global){
-    CodeObject co = AS_CODE(ALLOC_CODE("main", 4));
+    CodeObject co = AS_CODE(Alloc_Code("main", 4));
 
     // TODO: Need a growing array for this
     co.code = malloc(sizeof(uint8_t) * 100000000); // TODO: DANGER! Handle memory! 100 000 000, Crashes if too many instructions
@@ -93,13 +93,13 @@ void Gen(CodeObject* co, Statement* statement, Global* global){
             Gen(co, (Statement*)expression.test, global); // Emit test
             Emit(co, OP_JMP_IF_FALSE); 
 
-            Emit64(co, 0); // 64 bytes for alternate address
+            Emit64(co, 0); // 64 bit for alternate address
             size_t else_jmp_address = Get_Offset(co) - 8; // 8 bytes for 64 bit
 
             Gen(co, (Statement*)expression.consequent, global); // Emit consequent
             Emit(co, OP_JMP); 
 
-            Emit64(co, 0); // 64 bytes for end address
+            Emit64(co, 0); // 64 bit for end address
             size_t end_address = Get_Offset(co) - 8; // 8 bytes for 64 bit
 
             // Patch else branch address
@@ -279,6 +279,8 @@ void Emit64(CodeObject* co, uint64_t value){
     co->code_last += 8;
 }
 
+#pragma region DISASSEMBLER
+
 char* opcodeToString(uint8_t opcode){
     switch (opcode)
     {
@@ -312,6 +314,8 @@ char* cmpCodeToString(uint8_t cmpcode){
 }
 
 void Disassemble(CodeObject* co, Global* global){
+    printf("\n------------------ MAIN DISASSEMBLY ------------------\n\n");
+
     size_t offset = 0;
     while(offset < co->code_last){
         uint8_t opcode = co->code[offset];
@@ -326,7 +330,7 @@ void Disassemble(CodeObject* co, Global* global){
 
         if(opcode == OP_CONST){
             printf("0x%04X", args);
-            printf(" (%s)", RuntimeValueToString(co->constants[args]));
+            printf(" (%s)", RuntimeValue_ToString(co->constants[args]));
             offset += 8;
         }
 
@@ -365,3 +369,5 @@ void Disassemble(CodeObject* co, Global* global){
 
     printf("\n");
 }
+
+#pragma endregion

@@ -1,14 +1,21 @@
 #pragma once
 
-typedef struct DynArray {
+// Array arr = Array_Create(1, sizeof(uint64_t));
+// uint64_t val = 5;
+// uint64_t val2 = 10;
+// Array_Append(&arr, &val);
+// Array_Append(&arr, &val2);
+// uint64_t test = arr.array[1 * arr.segment_size];
+
+typedef struct Array {
     uint8_t* array;
     size_t used;
     size_t size;
     size_t segment_size;
-} DynArray;
+} Array;
 
-DynArray DynArray_Create(size_t initial_size, size_t segment_size) {
-    DynArray arr;
+Array Array_Create(size_t initial_size, size_t segment_size) {
+    Array arr;
     arr.array = malloc(initial_size * segment_size);
     arr.used = 0;
     arr.size = initial_size;
@@ -17,15 +24,15 @@ DynArray DynArray_Create(size_t initial_size, size_t segment_size) {
     return arr;
 }
 
-void DynArray_Resize(DynArray *arr) {
+void Array_Resize(Array *arr) {
     if (arr->used == arr->size) {
         arr->size *= 2;
         arr->array = (char*)realloc(arr->array, arr->size * arr->segment_size);
     }
 }
 
-void DynArray_Append(DynArray *arr, void* element) {
-    DynArray_Resize(arr);
+void Array_Append(Array *arr, void* element) {
+    Array_Resize(arr);
 
     memcpy(&arr->array[arr->used * arr->segment_size], element, arr->segment_size);
     // arr->array[arr->used++] = element;

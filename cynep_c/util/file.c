@@ -2,7 +2,8 @@
 
 typedef struct SourceFile SourceFile;
 
-struct SourceFile{
+struct SourceFile
+{
     size_t length;
     char* buffer;
     char* path;

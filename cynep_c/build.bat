@@ -1,1 +1,1 @@
-gcc -o ./build/program.exe program.c
+gcc -g -o ./build/main.exe main.c
