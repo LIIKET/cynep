@@ -5,7 +5,10 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}\\build\\main.exe",
-            "args": [],
+            "args": [
+                "-ast",
+                "-dis"
+            ],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}\\build",
             "environment": [],

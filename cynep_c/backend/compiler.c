@@ -10,6 +10,7 @@ void        Write_Byte_At_Offset(CodeObject* co, size_t offset, uint8_t value);
 void        Emit64(CodeObject* co, uint64_t value);
 
 CodeObject Compile(Statement* statement, Global* global){
+    int64 compile_begin = timestamp();
     CodeObject co = AS_CODE(Alloc_Code("main", 4));
 
     // TODO: Need a growing array for this
@@ -19,6 +20,9 @@ CodeObject Compile(Statement* statement, Global* global){
     Gen(&co, statement, global);
     
     Emit(&co, OP_HALT);
+
+    int64 compile_end = timestamp();
+    printf("Compiling: %d ms\n", compile_end/1000-compile_begin/1000);
 
     return co;
 }

@@ -399,6 +399,8 @@ RuntimeValue VM_Eval(VM* vm, CodeObject* co, Global* global){
 // Reads 64 bit address.
 uint64_t VM_Read_Address(VM* vm){ 
     uint64_t result = *vm->ip;
+    // uint64_t result = *(int64_t*)(vm->ip);
+    memcpy(&result, vm->ip, sizeof(uint64_t));
     vm->ip += 8;
 
     return result;

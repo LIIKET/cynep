@@ -431,7 +431,7 @@ void Print_Node(Statement* node)
     }
 }
 
-void PrettyPrint(Statement* node, char* indent, bool isLast){
+void Print_AST_Node(Statement* node, char* indent, bool isLast){
     char* marker;
 
     if(isLast)
@@ -469,11 +469,17 @@ void PrettyPrint(Statement* node, char* indent, bool isLast){
 
     SSNode* cursor = children->first;
     while(cursor != NULL){
-        PrettyPrint(cursor->value, new_indent, cursor->next == NULL);
+        Print_AST_Node(cursor->value, new_indent, cursor->next == NULL);
         cursor = cursor->next;
     }
 
     // Cleanup
     SSList_Free(children);
     free(new_indent);
+}
+
+void Prinst_AST(Statement* program){
+    printf("\n---------------- ABSTRACT SYNTAX TREE ----------------\n\n");
+
+    Print_AST_Node(program, "", true);
 }
