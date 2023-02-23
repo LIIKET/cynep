@@ -321,6 +321,10 @@ Expression* Parse_PrimaryExpression()
             {
                 return (Expression*)Create_NumericLiteral(Seed_Memory(), Consume().number_value); //atoi(Consume().value)
             }
+        case Token_String:
+            {     
+                return (Expression*)Create_StringLiteral(Seed_Memory(), Consume().string_value); //atoi(Consume().value)
+            }
         case Token_OpenParen:
             {
                 Consume(); // Throw away open paren
@@ -331,7 +335,8 @@ Expression* Parse_PrimaryExpression()
             }
         default:
             {
-                //printf("Unexpected token in parser: \"%s\"\n", Current().value);
+                printf("Unexpected token in parser.");
+                // printf("Unexpected token in parser: \"%s\"\n", Current().value);
                 exit(0);
             }
     }

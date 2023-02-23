@@ -8,6 +8,7 @@ void        Emit(CodeObject* co, uint8_t code);
 void        Write_Address_At_Offset(CodeObject* co, size_t offset, uint64_t value);
 void        Write_Byte_At_Offset(CodeObject* co, size_t offset, uint8_t value);
 void        Emit64(CodeObject* co, uint64_t value);
+int64 String_Const_Index(CodeObject* co, BufferString* string);
 
 CodeObject Compile(Statement* statement, Global* global){
     int64 compile_begin = timestamp();
@@ -15,7 +16,7 @@ CodeObject Compile(Statement* statement, Global* global){
 
     // TODO: Need a growing array for this
     co.code = malloc(sizeof(uint8_t) * 100000000); // TODO: DANGER! Handle memory! 100 000 000, Crashes if too many instructions
-    co.constants = malloc(sizeof(RuntimeValue) * 100000000); // TODO: DANGER! Handle memory! 100 000 000, Crashes if too many constants
+    co.constants = malloc(sizeof(RuntimeValue) * 100); // TODO: DANGER! Handle memory! 100 000 000, Crashes if too many constants
 
     Gen(&co, statement, global);
     
@@ -115,7 +116,7 @@ void Gen(CodeObject* co, Statement* statement, Global* global){
                 Gen(co, (Statement*)expression.alternate, global); 
             }
             else{
-                //TODO: NULL if no alternate branch
+                // TODO: NULL if no alternate branch
                 // Emit(co, OP_CONST);
                 // size_t index = Numeric_Const_Index(co, -999);
                 // Emit64(co, index);
@@ -129,15 +130,15 @@ void Gen(CodeObject* co, Statement* statement, Global* global){
         }
 
         case AST_BlockStatement:{
-            BlockStatement st = *(BlockStatement*)statement;
+            BlockStatement blockStatement = *(BlockStatement*)statement;
 
-            SSNode* current_node = statement->block_statement.body->first;
+            SSNode* current_node = blockStatement.body->first;
             while (current_node != NULL)
             {
                 Gen(co, current_node->value, global);
                 current_node = current_node->next;
 
-                // Pop if last
+                //Pop if last
                 // if(current_node == NULL){
                 //     Emit(co, OP_POP);
                 // }
@@ -148,12 +149,6 @@ void Gen(CodeObject* co, Statement* statement, Global* global){
         case AST_NumericLiteral: {
             NumericLiteral expression = *(NumericLiteral*)statement;
 
-            // co->constants[co->constants_last] = NUMBER(expression.value);
-            // Emit(co, OP_CONST);
-            // Emit64(co, co->constants_last);
-            // co->constants_last++;
-
-            //co->constants[co->constants_last] = NUMBER(expression.value);
             Emit(co, OP_CONST);
             size_t index = Numeric_Const_Index(co, expression.value);
             Emit64(co, index);
@@ -161,26 +156,42 @@ void Gen(CodeObject* co, Statement* statement, Global* global){
             break;
         }
 
+        case AST_StringLiteral: {
+            StringLiteral expression = *(StringLiteral*)statement;
+
+            size_t index = String_Const_Index(co, &expression.value);
+
+            Emit(co, OP_CONST);
+            Emit64(co, index);
+            // co->constants_last++;
+
+            break;
+        }
+
         case AST_Identifier: {
             Identifier identifier = *(Identifier*)statement;
             if(strncmp(identifier.name.start,"true", identifier.name.length) == 0){
+                // TODO: Important! Make it like Numeric_Const_Index
                 co->constants[co->constants_last] = BOOLEAN(true);
                 Emit(co, OP_CONST);
                 Emit64(co, co->constants_last);
-
                 co->constants_last++;
             }
             else if(strncmp(identifier.name.start,"false", identifier.name.length) == 0){
+                // TODO: Important! Make it like Numeric_Const_Index
                 co->constants[co->constants_last] = BOOLEAN(false);
                 Emit(co, OP_CONST);
                 Emit64(co, co->constants_last);
-
+                co->constants_last++;
+            }
+            else if(strncmp(identifier.name.start,"null", identifier.name.length) == 0){
+                // TODO: Important! Make it like Numeric_Const_Index
+                co->constants[co->constants_last] = RUNTIME_NULL();
+                Emit(co, OP_CONST);
+                Emit64(co, co->constants_last);
                 co->constants_last++;
             }
             else{
-                // char* name = malloc(sizeof(char) * 10); // TODO: FIXA
-                // strncpy(name, identifier.name.start, identifier.name.length);
-                // name[identifier.name.length] = NULL_CHAR;
                 int64 index = Global_GetIndexBufferString(global, &identifier.name);
 
                 if(index == -1){
@@ -206,10 +217,11 @@ void Gen(CodeObject* co, Statement* statement, Global* global){
                 Gen(co, (Statement*)variableDeclaration.value, global);
             }
             else{
-                // TODO: Emit null
+                //TODO: Important! Make it like Numeric_Const_Index
+                co->constants[co->constants_last] = RUNTIME_NULL();
                 Emit(co, OP_CONST);
-                size_t index = Numeric_Const_Index(co, -999);
-                Emit64(co, index);
+                Emit64(co, co->constants_last);
+                co->constants_last++;
             }
 
             Emit(co, OP_SET_GLOBAL);
@@ -247,7 +259,7 @@ void Gen(CodeObject* co, Statement* statement, Global* global){
 size_t Numeric_Const_Index(CodeObject* co, float64 value){
     for (size_t i = 0; i < co->constants_last + 1; i++)
     {
-        if(co->constants[i].type != ValuteType_Number){
+        if(co->constants[i].type != ValueType_Number){
             continue;
         }
         if(co->constants[i].number == value){
@@ -256,6 +268,35 @@ size_t Numeric_Const_Index(CodeObject* co, float64 value){
     }
 
     co->constants[co->constants_last] = NUMBER(value);
+
+    return co->constants_last++; // Increments after return
+}
+
+int64 String_Const_Index(CodeObject* co, BufferString* string){
+    for (size_t i = 0; i < co->constants_last + 1; i++)
+    {
+        if(co->constants[i].type != ValueType_Object){
+            continue;
+        }
+
+        StringObject* strObj = (StringObject*)co->constants[i].object;
+        uint64 current_length = strlen(strObj->string);
+
+        if(current_length == string->length && strncmp(string->start, strObj->string, string->length) == 0){
+            return i;
+        }
+
+        // if(co->constants[i].number == value){
+        //     return i;
+        // }
+    }
+
+
+
+
+    char* str = Create_String_From_BufferString(*string);
+
+    co->constants[co->constants_last] = Alloc_String(str);
 
     return co->constants_last++; // Increments after return
 }

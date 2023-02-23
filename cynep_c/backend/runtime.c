@@ -24,7 +24,8 @@ void            VM_Exception(char* msg);
 
 enum ValueType 
 {
-    ValuteType_Number,
+    ValueType_Null,
+    ValueType_Number,
     ValueType_Boolean,
     ValueType_Object
 };
@@ -55,7 +56,6 @@ struct StringObject
 {
     Object object;
     char* string;
-    size_t length;
 };
 
 struct CodeObject 
@@ -97,8 +97,9 @@ struct VM
 
 #pragma region RUNTIME_VALUE
 
-#define NUMBER(value) (RuntimeValue){.type = ValuteType_Number, .number = value}
+#define NUMBER(value) (RuntimeValue){.type = ValueType_Number, .number = value}
 #define BOOLEAN(value) (RuntimeValue){.type = ValueType_Boolean, .boolean = value}
+#define RUNTIME_NULL() (RuntimeValue){.type = ValueType_Null }
 
 #define AS_STRING(value) (*(StringObject*)value.object)
 #define AS_CODE(value) (*(CodeObject*)value.object)
@@ -108,7 +109,7 @@ struct VM
 char* RuntimeValue_ToString(RuntimeValue value){
     size_t buff_size = 100; 
     
-    if(value.type == ValuteType_Number){
+    if(value.type == ValueType_Number){
         char* buf = malloc(sizeof(char) * buff_size);
         gcvt(value.number, 6, buf);
         return buf;
@@ -119,27 +120,70 @@ char* RuntimeValue_ToString(RuntimeValue value){
         else
             return "false";
     }
+    if(value.type == ValueType_Null){
+        return "null";
+    }
     if(value.type == ValueType_Object && value.object->objectType == ObjectType_Code){
         CodeObject code = AS_CODE(value);
         char* buf = malloc(sizeof(char) * buff_size);
         strncpy(buf, code.name, code.name_length);
         return buf;
     }
+    if(value.type == ValueType_Object && value.object->objectType == ObjectType_String){
+        StringObject str = AS_STRING(value);
+        char* buf = malloc(sizeof(char) * buff_size);
+        strcpy(buf, str.string);
+        return buf;
+    }
 
-    return "VM: Not implemented";
+    return "VM: ToString not implemented";
 }
 
-RuntimeValue Alloc_String(char* value, size_t length){
+RuntimeValue Alloc_String(char* value){
     RuntimeValue result;
     result.type = ValueType_Object;
 
     StringObject* stringObject = malloc(sizeof(StringObject));
+
     stringObject->object.objectType = ObjectType_String;
     stringObject->string = value;
-    stringObject->length = length;
     result.object = (Object*)stringObject;
     
     return result;
+}
+
+RuntimeValue Alloc_String_Combine(StringObject* one, StringObject* two){
+    RuntimeValue result;
+    result.type = ValueType_Object;
+
+    char* str1 = one->string;
+    char* str2 = two->string;
+
+    uint64 str1_size = strlen(str1);
+    uint64 str2_size = strlen(str2);
+
+    // Put string and string object in same memory block for performance
+    void* memory = malloc(sizeof(StringObject) + (str1_size + str2_size) * sizeof(char));
+
+    memcpy(memory + sizeof(StringObject), str1, (str1_size + str2_size) * sizeof(char));
+    memcpy(memory + sizeof(StringObject) + str1_size, str2, str2_size * sizeof(char));
+
+    StringObject* stringObject = memory;
+    stringObject->object.objectType = ObjectType_String;
+
+    stringObject->string = memory + sizeof(StringObject);
+
+    result.object = (Object*)stringObject;
+    
+    return result;
+}
+
+char* Create_String_From_BufferString(BufferString value){
+    char* string = malloc(sizeof(char) * value.length);
+    strncpy(string, value.start, value.length);
+    string[value.length] = NULL_CHAR;
+
+    return string;
 }
 
 RuntimeValue Alloc_Code(char* name, size_t name_length){
@@ -189,7 +233,8 @@ int64 Global_GetIndex(Global* global, char* name){
 int64 Global_GetIndexBufferString(Global* global, BufferString* name){
     if(global->globals_size > 1){
         for(int64 i = global->globals_size - 1; i >= 0; i--){
-            if(strncmp(global->globals[i].name, name->start, name->length) == 0){
+            uint64 current_length = strlen(global->globals[i].name);
+            if(current_length == name->length && strncmp(name->start, global->globals[i].name, name->length) == 0){
                 return i;
             }
         }
@@ -277,6 +322,7 @@ RuntimeValue VM_exec(VM* vm, Global* global, CodeObject* codeObject){
         VM_Stack_Push(vm, &NUMBER(result));     \
     } while (false)                             \
 
+
 RuntimeValue VM_Eval(VM* vm, CodeObject* co, Global* global){
     int64 t1 = timestamp();
 
@@ -300,13 +346,47 @@ RuntimeValue VM_Eval(VM* vm, CodeObject* co, Global* global){
                 break;
             }
 
-            case OP_POP:{
-                VM_Stack_Pop(vm);
+            // case OP_POP:{
+            //     VM_Stack_Pop(vm);
 
-                break;
+            //     break;
+            // }
+
+            case OP_ADD: {
+                RuntimeValue op2 = VM_Stack_Pop(vm);
+                RuntimeValue op1 = VM_Stack_Pop(vm);
+
+                if(op1.type == ValueType_Number && op2.type == ValueType_Number){
+                    float64 result = op1.number + op2.number;
+                    VM_Stack_Push(vm, &NUMBER(result));
+
+                    break;
+                }
+                else if(op1.type == ValueType_Object && op1.object->objectType == ObjectType_String
+                     && op2.type == ValueType_Object && op2.object->objectType == ObjectType_String){
+                    
+                    StringObject str1 = AS_STRING(op1);
+                    StringObject str2 = AS_STRING(op2);
+                    RuntimeValue value = Alloc_String_Combine(&str1, &str2);
+
+                    // TODO: THIS IS SLOW AS FUCK! FIX!
+                    // char* str1 = AS_STRING(op1).string;
+                    // char* str2 = AS_STRING(op2).string;
+
+                    // char* res = malloc(strlen(str1) + strlen(str2));
+
+                    // strcpy(res, str1);
+                    // strcat(res, str2);
+
+                    //RuntimeValue value = Alloc_String(res);
+                    VM_Stack_Push(vm, &value);
+
+                    break;
+                }
+
+                VM_Exception("Illegal add operation.");
             }
 
-            case OP_ADD: BINARY_OP(+); break;
             case OP_SUB: BINARY_OP(-); break;
             case OP_MUL: BINARY_OP(*); break;
             case OP_DIV: BINARY_OP(/); break;
@@ -316,7 +396,7 @@ RuntimeValue VM_Eval(VM* vm, CodeObject* co, Global* global){
                 RuntimeValue op2 = VM_Stack_Pop(vm);
                 RuntimeValue op1 = VM_Stack_Pop(vm);
 
-                if(op2.type == ValuteType_Number && op1.type == ValuteType_Number){
+                if(op2.type == ValueType_Number && op1.type == ValueType_Number){
 
                     bool res;
                     switch (cmp_type)
@@ -340,7 +420,7 @@ RuntimeValue VM_Eval(VM* vm, CodeObject* co, Global* global){
                         res = op1.number != op2.number;
                         break;
                     default:
-                        VM_Exception("Illegal comparison");
+                        VM_Exception("Illegal comparison.");
                     }
                     VM_Stack_Push(vm, &BOOLEAN(res));
                 }
@@ -399,7 +479,6 @@ RuntimeValue VM_Eval(VM* vm, CodeObject* co, Global* global){
 // Reads 64 bit address.
 uint64_t VM_Read_Address(VM* vm){ 
     uint64_t result = *vm->ip;
-    // uint64_t result = *(int64_t*)(vm->ip);
     memcpy(&result, vm->ip, sizeof(uint64_t));
     vm->ip += 8;
 
@@ -418,7 +497,6 @@ void VM_Stack_Push(VM* vm, RuntimeValue* value){
     if(vm->sp == vm->stack_end){
         VM_Exception("Stack Overflow");
     }
-    RuntimeValue asd = *value;
     *vm->sp = *value;
     vm->sp++;
 }

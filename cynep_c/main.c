@@ -20,6 +20,7 @@
 #include "backend/compiler.c"
 
 bool arg(int argc, char**argv, char* search){
+    return false;
     for (uint64 i = 1; i < argc; i++)
     {
         if(strcmp(argv[i], search) == 0){

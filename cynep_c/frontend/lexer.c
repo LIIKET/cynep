@@ -8,6 +8,7 @@ enum TokenType
 {
     // Literals
     Token_Number,
+    Token_String,
     Token_Identifier,
 
     // Keywords
@@ -201,6 +202,21 @@ Token* lexer_tokenize(SourceFile* file)
                 
                 break;
             }
+            case '"':{
+                char* start = current + 1;
+                uint64 start_pos = iterator + 1;
+                uint64 length = 0;
+
+                while (file_buffer[start_pos + length] != '"')
+                {
+                    length++;
+                }
+                iterator += length + 1;
+
+                Token_Create(&tokens[tokens_count++], Token_String, start, length); 
+
+                break;
+            }
             default: 
             {
                 // Handle multicharacter tokens here
@@ -257,7 +273,7 @@ Token* lexer_tokenize(SourceFile* file)
                 }
                 else
                 {   
-                    printf("Lexer error. Unrecognized character in source: \"%c\".\n", current);
+                    printf("Lexer error. Unrecognized character in source: \"%c\".\n", *current);
                     exit(0);
                 }
             }

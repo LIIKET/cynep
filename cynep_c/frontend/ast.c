@@ -5,6 +5,7 @@ typedef struct Statement Statement;
 typedef struct BlockStatement BlockStatement;
 typedef struct Identifier Identifier;
 typedef struct NumericLiteral NumericLiteral;
+typedef struct StringLiteral StringLiteral;
 typedef struct VariableDeclaration VariableDeclaration;
 typedef struct PropertyDeclaration PropertyDeclaration;
 typedef struct TypeDeclaration TypeDeclaration;
@@ -34,6 +35,7 @@ enum NodeType
 
     // Literals
     AST_NumericLiteral,
+    AST_StringLiteral,
     AST_Identifier,
 };
 
@@ -57,6 +59,11 @@ struct Identifier
 struct NumericLiteral 
 {
     int64 value;
+};
+
+struct StringLiteral 
+{
+    BufferString value;
 };
 
 struct VariableDeclaration 
@@ -111,6 +118,7 @@ struct Statement
         IfStatement ifStatement;
         Identifier identifier;
         NumericLiteral numeric_literal;
+        StringLiteral string_literal;
         VariableDeclaration variable_declaration;
         PropertyDeclaration property_declaration;
         TypeDeclaration type_declaration;
@@ -245,6 +253,14 @@ NumericLiteral* Create_NumericLiteral(Statement* memory, int64 value)
     return (NumericLiteral*)memory;
 }
 
+StringLiteral* Create_StringLiteral(Statement* memory, BufferString value)
+{
+    memory->type = AST_StringLiteral;
+    memory->string_literal.value = value;
+
+    return (StringLiteral*)memory;
+}
+
 //
 // Visualizing
 //
@@ -267,8 +283,10 @@ SSList* Get_Children(Statement* expression)
         {
             VariableDeclaration* node = (VariableDeclaration*)expression;
             
-            SSNode* newNode = SSNode_Create(malloc(sizeof(SSNode)), node->value);
-            SSList_Append(list, newNode);
+            if(node->value != NULL){
+                SSNode* newNode = SSNode_Create(malloc(sizeof(SSNode)), node->value);
+                SSList_Append(list, newNode);
+            }
 
             break;
         }
