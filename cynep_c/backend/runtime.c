@@ -164,26 +164,40 @@ RuntimeValue Alloc_String_Combine(StringObject* one, StringObject* two){
 
     // Put string and string object in same memory block for performance
     void* memory = malloc(sizeof(StringObject) + (str1_size + str2_size) * sizeof(char));
+    char* string = memory + sizeof(StringObject);
 
-    memcpy(memory + sizeof(StringObject), str1, (str1_size + str2_size) * sizeof(char));
-    memcpy(memory + sizeof(StringObject) + str1_size, str2, str2_size * sizeof(char));
+    strcpy(string, str1);
+    strcpy(&string[str1_size], str2);
 
     StringObject* stringObject = memory;
     stringObject->object.objectType = ObjectType_String;
 
-    stringObject->string = memory + sizeof(StringObject);
+    stringObject->string = string;
 
     result.object = (Object*)stringObject;
     
     return result;
 }
 
-char* Create_String_From_BufferString(BufferString value){
-    char* string = malloc(sizeof(char) * value.length);
-    strncpy(string, value.start, value.length);
-    string[value.length] = NULL_CHAR;
+RuntimeValue Alloc_String_From_BufferString(BufferString* value){
+    RuntimeValue result;
+    result.type = ValueType_Object;
 
-    return string;
+    // Put string and string object in same memory block for performance
+    void* memory = malloc(sizeof(StringObject) + (value->length * sizeof(char)) + 1);
+    char* string = memory + sizeof(StringObject);
+
+    strncpy(string, value->start, value->length);
+
+    string[value->length] = NULL_CHAR;
+
+    StringObject* stringObject = memory;
+    stringObject->object.objectType = ObjectType_String;
+    stringObject->string = string;
+
+    result.object = (Object*)stringObject;
+
+    return result;
 }
 
 RuntimeValue Alloc_Code(char* name, size_t name_length){
@@ -257,14 +271,14 @@ void Global_Define(Global* global, BufferString* name){
     var->value = NUMBER(0); // TODO: Set to null
 }
 
-void Global_Add(Global* global, char* name, float64 value){
+void Global_Add(Global* global, char* name, RuntimeValue value){
     if(Global_GetIndex(global, name) != -1){
         return;
     }
 
     GlobalVar* var = &global->globals[global->globals_size];
     var->name = name;
-    var->value = NUMBER(value);
+    var->value = value;
 
     global->globals_size++;
 }
@@ -358,6 +372,7 @@ RuntimeValue VM_Eval(VM* vm, CodeObject* co, Global* global){
 
                 if(op1.type == ValueType_Number && op2.type == ValueType_Number){
                     float64 result = op1.number + op2.number;
+
                     VM_Stack_Push(vm, &NUMBER(result));
 
                     break;
@@ -369,16 +384,6 @@ RuntimeValue VM_Eval(VM* vm, CodeObject* co, Global* global){
                     StringObject str2 = AS_STRING(op2);
                     RuntimeValue value = Alloc_String_Combine(&str1, &str2);
 
-                    // TODO: THIS IS SLOW AS FUCK! FIX!
-                    // char* str1 = AS_STRING(op1).string;
-                    // char* str2 = AS_STRING(op2).string;
-
-                    // char* res = malloc(strlen(str1) + strlen(str2));
-
-                    // strcpy(res, str1);
-                    // strcat(res, str2);
-
-                    //RuntimeValue value = Alloc_String(res);
                     VM_Stack_Push(vm, &value);
 
                     break;
@@ -395,38 +400,85 @@ RuntimeValue VM_Eval(VM* vm, CodeObject* co, Global* global){
                 uint8_t cmp_type = VM_Read_Byte(vm);
                 RuntimeValue op2 = VM_Stack_Pop(vm);
                 RuntimeValue op1 = VM_Stack_Pop(vm);
+                bool res;
 
-                if(op2.type == ValueType_Number && op1.type == ValueType_Number){
-
-                    bool res;
+                if(op2.type == ValueType_Number && op1.type == ValueType_Number)
+                {
                     switch (cmp_type)
                     {
-                    case OP_CMP_GT:
-                        res = op1.number > op2.number;
-                        break;
-                    case OP_CMP_LT:
-                        res = op1.number < op2.number;
-                        break;
-                    case OP_CMP_EQ:
-                        res = op1.number == op2.number;
-                        break;
-                    case OP_CMP_GE:
-                        res = op1.number >= op2.number;
-                        break;
-                    case OP_CMP_LE:
-                        res = op1.number <= op2.number;
-                        break;
-                    case OP_CMP_NE:
-                        res = op1.number != op2.number;
-                        break;
-                    default:
-                        VM_Exception("Illegal comparison.");
-                    }
-                    VM_Stack_Push(vm, &BOOLEAN(res));
+                        case OP_CMP_GT:
+                            res = op1.number > op2.number;
+                            break;
+                        case OP_CMP_LT:
+                            res = op1.number < op2.number;
+                            break;
+                        case OP_CMP_EQ:
+                            res = op1.number == op2.number;
+                            break;
+                        case OP_CMP_GE:
+                            res = op1.number >= op2.number;
+                            break;
+                        case OP_CMP_LE:
+                            res = op1.number <= op2.number;
+                            break;
+                        case OP_CMP_NE:
+                            res = op1.number != op2.number;
+                            break;
+                        default:
+                            VM_Exception("Illegal comparison.");
+                    }  
+                }
+                else if(op2.type == ValueType_Boolean && op1.type == ValueType_Boolean)
+                {
+                    switch (cmp_type)
+                    {
+                        case OP_CMP_EQ:
+                            res = op1.boolean == op2.boolean;
+                            break;
+                        case OP_CMP_NE:
+                            res = op1.boolean != op2.boolean;
+                            break;
+                        default:
+                            VM_Exception("Illegal comparison.");
+                    }  
+                }
+                else if(op1.type == ValueType_Object && op1.object->objectType == ObjectType_String
+                     && op2.type == ValueType_Object && op2.object->objectType == ObjectType_String)
+                {
+                    StringObject str1 = AS_STRING(op1);
+                    StringObject str2 = AS_STRING(op2);
+
+                    switch (cmp_type)
+                    {
+                        case OP_CMP_EQ:
+                            res = strcmp(str1.string, str2.string) == 0;
+                            break;
+                        case OP_CMP_NE:
+                            res = strcmp(str1.string, str2.string) != 0;
+                            break;
+                        default:
+                            VM_Exception("Illegal comparison.");
+                    }  
+                }
+                else if(op2.type == ValueType_Null || op1.type == ValueType_Null)
+                {
+                    switch (cmp_type)
+                    {
+                        case OP_CMP_EQ:
+                            res = op2.type == ValueType_Null && op1.type == ValueType_Null;
+                            break;
+                        case OP_CMP_NE:
+                            res = op2.type != ValueType_Null || op1.type != ValueType_Null;
+                            break;
+                        default:
+                            VM_Exception("Illegal comparison.");
+                    }  
                 }
                 else{
-                    // TODO: String comparisons etc.
+                    VM_Exception("Illegal comparison.");
                 }
+
+                VM_Stack_Push(vm, &BOOLEAN(res));
 
                 break;
             }

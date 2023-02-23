@@ -8,7 +8,7 @@ void        Emit(CodeObject* co, uint8_t code);
 void        Write_Address_At_Offset(CodeObject* co, size_t offset, uint64_t value);
 void        Write_Byte_At_Offset(CodeObject* co, size_t offset, uint8_t value);
 void        Emit64(CodeObject* co, uint64_t value);
-int64 String_Const_Index(CodeObject* co, BufferString* string);
+int64       String_Const_Index(CodeObject* co, BufferString* string);
 
 CodeObject Compile(Statement* statement, Global* global){
     int64 compile_begin = timestamp();
@@ -17,6 +17,12 @@ CodeObject Compile(Statement* statement, Global* global){
     // TODO: Need a growing array for this
     co.code = malloc(sizeof(uint8_t) * 100000000); // TODO: DANGER! Handle memory! 100 000 000, Crashes if too many instructions
     co.constants = malloc(sizeof(RuntimeValue) * 100); // TODO: DANGER! Handle memory! 100 000 000, Crashes if too many constants
+    
+    // Setup null, true and false consts. Compiler assumes this index order!
+    co.constants[co.constants_last++] = RUNTIME_NULL();
+    co.constants[co.constants_last++] = BOOLEAN(true);
+    co.constants[co.constants_last++] = BOOLEAN(false);
+
 
     Gen(&co, statement, global);
     
@@ -149,8 +155,9 @@ void Gen(CodeObject* co, Statement* statement, Global* global){
         case AST_NumericLiteral: {
             NumericLiteral expression = *(NumericLiteral*)statement;
 
-            Emit(co, OP_CONST);
             size_t index = Numeric_Const_Index(co, expression.value);
+
+            Emit(co, OP_CONST);
             Emit64(co, index);
 
             break;
@@ -163,33 +170,24 @@ void Gen(CodeObject* co, Statement* statement, Global* global){
 
             Emit(co, OP_CONST);
             Emit64(co, index);
-            // co->constants_last++;
 
             break;
         }
 
         case AST_Identifier: {
             Identifier identifier = *(Identifier*)statement;
+            
             if(strncmp(identifier.name.start,"true", identifier.name.length) == 0){
-                // TODO: Important! Make it like Numeric_Const_Index
-                co->constants[co->constants_last] = BOOLEAN(true);
                 Emit(co, OP_CONST);
-                Emit64(co, co->constants_last);
-                co->constants_last++;
+                Emit64(co, 1);
             }
             else if(strncmp(identifier.name.start,"false", identifier.name.length) == 0){
-                // TODO: Important! Make it like Numeric_Const_Index
-                co->constants[co->constants_last] = BOOLEAN(false);
                 Emit(co, OP_CONST);
-                Emit64(co, co->constants_last);
-                co->constants_last++;
+                Emit64(co, 2);
             }
             else if(strncmp(identifier.name.start,"null", identifier.name.length) == 0){
-                // TODO: Important! Make it like Numeric_Const_Index
-                co->constants[co->constants_last] = RUNTIME_NULL();
                 Emit(co, OP_CONST);
-                Emit64(co, co->constants_last);
-                co->constants_last++;
+                Emit64(co, 0);
             }
             else{
                 int64 index = Global_GetIndexBufferString(global, &identifier.name);
@@ -217,15 +215,15 @@ void Gen(CodeObject* co, Statement* statement, Global* global){
                 Gen(co, (Statement*)variableDeclaration.value, global);
             }
             else{
-                //TODO: Important! Make it like Numeric_Const_Index
-                co->constants[co->constants_last] = RUNTIME_NULL();
-                Emit(co, OP_CONST);
-                Emit64(co, co->constants_last);
-                co->constants_last++;
+                // Emit null
+                Emit(co, OP_GET_GLOBAL);
+                Emit64(co, 0); // TODO: 0 is index for null. Make this clear in some way
             }
 
             Emit(co, OP_SET_GLOBAL);
             Emit64(co, index);
+
+            // TODO: Handle scoped variables
             break;
         }
 
@@ -285,18 +283,9 @@ int64 String_Const_Index(CodeObject* co, BufferString* string){
         if(current_length == string->length && strncmp(string->start, strObj->string, string->length) == 0){
             return i;
         }
-
-        // if(co->constants[i].number == value){
-        //     return i;
-        // }
     }
 
-
-
-
-    char* str = Create_String_From_BufferString(*string);
-
-    co->constants[co->constants_last] = Alloc_String(str);
+    co->constants[co->constants_last] = Alloc_String_From_BufferString(string);
 
     return co->constants_last++; // Increments after return
 }

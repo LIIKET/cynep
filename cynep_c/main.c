@@ -20,7 +20,6 @@
 #include "backend/compiler.c"
 
 bool arg(int argc, char**argv, char* search){
-    return false;
     for (uint64 i = 1; i < argc; i++)
     {
         if(strcmp(argv[i], search) == 0){
@@ -44,8 +43,9 @@ int main(int argc, char**argv)
 
     // Setup global object
     Global* global = Create_Global();
-    Global_Add(global, "leet", 1337);
-    Global_Add(global, "y", 7331);
+    Global_Add(global, "leet", NUMBER(1337));
+    Global_Add(global, "y", NUMBER(7331));
+
 
     // Compile
     CodeObject codeObject = Compile((Statement*)program, global);
