@@ -10,6 +10,7 @@ typedef struct StringObject StringObject;
 typedef struct CodeObject CodeObject;
 typedef struct GlobalVar GlobalVar;
 typedef struct Global Global;
+typedef struct LocalVar LocalVar;
 
 RuntimeValue    VM_Eval(VM* vm, CodeObject* co, Global* global);
 RuntimeValue    VM_Stack_Peek(VM* vm, size_t offset);
@@ -63,10 +64,15 @@ struct CodeObject
     Object object;
     char* name;
     size_t name_length;
-    uint8_t* code; // Bytearray of opcodes
+    uint8_t* code; // Array of opcodes
     size_t code_last;
     RuntimeValue* constants;
     uint64_t constants_last;
+
+    int8_t scope_level;
+    LocalVar* locals;
+    uint64 locals_size;
+    uint64 locals_max;
 };
 
 struct GlobalVar 
@@ -75,9 +81,16 @@ struct GlobalVar
     RuntimeValue value;
 };
 
+struct LocalVar 
+{
+    char* name;
+    int8_t scope_level;
+    RuntimeValue value;
+};
+
 struct Global 
 {
-    GlobalVar* globals;
+    GlobalVar* globals; // Array of global variables
     int64 globals_size;
     int64 globals_max;
 };
@@ -91,6 +104,7 @@ struct VM
     RuntimeValue* stack_start; // First address of stack
     RuntimeValue* stack_end; // Last address of stack
     RuntimeValue* sp; // Stack pointer
+    RuntimeValue* bp; // Base pointer / Frame pointer
 };
 
 #pragma endregion
@@ -210,6 +224,12 @@ RuntimeValue Alloc_Code(char* name, size_t name_length){
     co->name_length = name_length;
     co->code_last = 0;
     co->constants_last = 0;
+    co->scope_level = -1;
+
+    co->locals = malloc(sizeof(LocalVar) * 10); // TODO: DANGER! Handle memory when adding
+    co->locals_size = 0;
+    co->locals_max = 10;
+
     result.object = (Object*)co;
     
     return result;
@@ -292,6 +312,41 @@ Global* Create_Global(){
 
 #pragma endregion
 
+#pragma region LOCALS
+
+int64 Local_GetIndexBufferString(CodeObject* co, BufferString* name){
+    if(co->locals_size > 0){
+        for(int64 i = co->locals_size - 1; i >= 0; i--){
+            uint64 current_length = strlen(co->locals[i].name);
+
+            if(current_length == name->length 
+            && strncmp(name->start, co->locals[i].name, name->length) == 0
+            && co->locals[i].scope_level == co->scope_level){
+                return i;
+            }
+        }
+    }
+
+    return -1;
+}
+
+void Local_Define(CodeObject* co, BufferString* name){
+    int64 index = Local_GetIndexBufferString(co, name);
+
+    if(index != -1){
+        return;
+    }
+
+    LocalVar* var = &co->locals[co->locals_size++];
+    var->scope_level = co->scope_level;
+    var->name = malloc(sizeof(char) * name->length + 1);
+    strncpy(var->name, name->start, name->length);
+    var->name[name->length] = NULL_CHAR;
+    var->value = RUNTIME_NULL(); // TODO: Set to null
+}
+
+#pragma endregion
+
 #pragma region VIRTUAL_MACHINE
 
 #define OP_HALT             0x00
@@ -306,6 +361,9 @@ Global* Create_Global(){
 #define OP_POP              0x09
 #define OP_GET_GLOBAL       0x0A
 #define OP_SET_GLOBAL       0x0B
+#define OP_GET_LOCAL        0x0C
+#define OP_SET_LOCAL        0x0D
+#define OP_SCOPE_EXIT       0x0E
 
 #define OP_CMP_GT           0x01
 #define OP_CMP_LT           0x02
@@ -324,6 +382,7 @@ RuntimeValue VM_exec(VM* vm, Global* global, CodeObject* codeObject){
     
     vm->ip = &codeObject->code[0];
     vm->sp = &vm->stack[0];
+    vm->bp = &vm->stack[0];
 
     return VM_Eval(vm, codeObject, global);
 }
@@ -360,11 +419,11 @@ RuntimeValue VM_Eval(VM* vm, CodeObject* co, Global* global){
                 break;
             }
 
-            // case OP_POP:{
-            //     VM_Stack_Pop(vm);
+            case OP_POP:{
+                VM_Stack_Pop(vm);
 
-            //     break;
-            // }
+                break;
+            }
 
             case OP_ADD: {
                 RuntimeValue op2 = VM_Stack_Pop(vm);
@@ -512,6 +571,38 @@ RuntimeValue VM_Eval(VM* vm, CodeObject* co, Global* global){
                 RuntimeValue value = VM_Stack_Peek(vm, 0);
                 Global_Set(global, index, &value);
 
+                break;
+            }
+
+            case OP_GET_LOCAL:{
+                uint64 address = VM_Read_Address(vm);
+                if(address < 0 ){ //|| address >= vm->stack_end
+                    VM_Exception("Invalid variable index.");
+                }
+                // RuntimeValue value = Global_Get(global, address).value;
+                VM_Stack_Push(vm, &vm->bp[address]);
+
+                break;
+            }
+
+            case OP_SET_LOCAL:{
+                int64 index = VM_Read_Address(vm);
+                RuntimeValue value = VM_Stack_Peek(vm, 0);
+                vm->bp[index] = value;
+
+                break;
+            }
+
+            case OP_SCOPE_EXIT:{
+                uint64 count = VM_Read_Address(vm);
+
+                if(count > 0){
+                    // Move the result above the vars that is getting popped
+                    *(vm->sp - 1 - count) = VM_Stack_Peek(vm, 0);
+
+                    // Pop back to before scope
+                    vm->sp -= count;
+                }
                 break;
             }
 

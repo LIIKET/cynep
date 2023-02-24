@@ -138,17 +138,42 @@ void Gen(CodeObject* co, Statement* statement, Global* global){
         case AST_BlockStatement:{
             BlockStatement blockStatement = *(BlockStatement*)statement;
 
+            // Scope begin
+            co->scope_level++;
+
             SSNode* current_node = blockStatement.body->first;
             while (current_node != NULL)
             {
                 Gen(co, current_node->value, global);
-                current_node = current_node->next;
 
-                //Pop if last
-                // if(current_node == NULL){
-                //     Emit(co, OP_POP);
-                // }
+                // Pop if not last last (last is return value)
+                bool is_global_declaration = 
+                    ((Statement*)current_node->value)->type == AST_VariableDeclaration && co->scope_level == 0;
+
+
+                if(current_node->next != NULL && is_global_declaration){
+                    Emit(co, OP_POP);
+                }
+
+                current_node = current_node->next;
             }
+
+            // Scope exit
+            if(co->scope_level != 0){
+                uint64 vars_to_pop = 0;
+                while (co->locals_size > 0 && co->locals[co->locals_size - 1].scope_level == co->scope_level)
+                {
+                    vars_to_pop++;
+                    co->locals_size--;
+                }
+                
+                Emit(co, OP_SCOPE_EXIT);
+                Emit64(co, vars_to_pop);
+                co->scope_level--;
+            }
+
+
+
             break;
         }
 
@@ -176,7 +201,7 @@ void Gen(CodeObject* co, Statement* statement, Global* global){
 
         case AST_Identifier: {
             Identifier identifier = *(Identifier*)statement;
-            
+
             if(strncmp(identifier.name.start,"true", identifier.name.length) == 0){
                 Emit(co, OP_CONST);
                 Emit64(co, 1);
@@ -190,40 +215,56 @@ void Gen(CodeObject* co, Statement* statement, Global* global){
                 Emit64(co, 0);
             }
             else{
-                int64 index = Global_GetIndexBufferString(global, &identifier.name);
 
-                if(index == -1){
-                    printf("\033[0;31mCompiler: Reference error \033[0m\n");
-                    exit(0);
+                // Handle scoped variables
+                int64 local_index = Local_GetIndexBufferString(co, &identifier.name);
+                if(local_index != -1){
+                    Emit(co, OP_GET_LOCAL);
+                    Emit64(co, local_index);
                 }
+                else{
+                    int64 global_index = Global_GetIndexBufferString(global, &identifier.name);
 
-                Emit(co, OP_GET_GLOBAL);
-                Emit64(co, index);
+                    if(global_index == -1){
+                        printf("\033[0;31mCompiler: Reference error \033[0m\n");
+                        exit(0);
+                    }
 
-                // TODO: Handle scoped variables
+                    Emit(co, OP_GET_GLOBAL);
+                    Emit64(co, global_index);
+                }
             }
             break;
         }
 
         case AST_VariableDeclaration: {
             VariableDeclaration variableDeclaration = *(VariableDeclaration*)statement;
-
-            Global_Define(global, &variableDeclaration.name);
-            int64 index = Global_GetIndexBufferString(global, &variableDeclaration.name);
-
             if(variableDeclaration.value != NULL){
                 Gen(co, (Statement*)variableDeclaration.value, global);
             }
             else{
-                // Emit null
-                Emit(co, OP_GET_GLOBAL);
-                Emit64(co, 0); // TODO: 0 is index for null. Make this clear in some way
+                // Emit null if no value
+                Emit(co, OP_CONST);
+                Emit64(co, 0);
             }
 
-            Emit(co, OP_SET_GLOBAL);
-            Emit64(co, index);
+            if(co->scope_level == 0) // If global scope
+            { 
+                Global_Define(global, &variableDeclaration.name); // This should return index directly
+                int64 index = Global_GetIndexBufferString(global, &variableDeclaration.name);
 
-            // TODO: Handle scoped variables
+                Emit(co, OP_SET_GLOBAL);
+                Emit64(co, index);
+            }
+            else // Handle scoped variables
+            {
+                Local_Define(co, &variableDeclaration.name); // This should return index directly
+                int64 index = Local_GetIndexBufferString(co, &variableDeclaration.name);
+
+                Emit(co, OP_SET_LOCAL);
+                Emit64(co, index);
+            }
+
             break;
         }
 
@@ -231,17 +272,27 @@ void Gen(CodeObject* co, Statement* statement, Global* global){
             AssignmentExpression assignmentExpression = *(AssignmentExpression*)statement; 
             Identifier* identifier = (Identifier*)assignmentExpression.assignee; // TODO: Handle expressions
 
-            int64 index = Global_GetIndexBufferString(global, &identifier->name);
-
-            if(index == -1){
-                printf("\033[0;31mCompiler: Reference error \033[0m\n");
-                exit(0);
-            }
-
+            // Emit value
             Gen(co, (Statement*)assignmentExpression.value, global);
 
-            Emit(co, OP_SET_GLOBAL);
-            Emit64(co, index);
+            // 1. Locals
+            int64 local_index = Local_GetIndexBufferString(co, &identifier->name);
+            if(local_index != -1){
+                Emit(co, OP_SET_LOCAL);
+                Emit64(co, local_index);
+            }
+            else{
+                // 2. Globals
+                int64 global_index = Global_GetIndexBufferString(global, &identifier->name);
+
+                if(global_index == -1){
+                    printf("\033[0;31mCompiler: Reference error \033[0m\n");
+                    exit(0);
+                }
+
+                Emit(co, OP_SET_GLOBAL);
+                Emit64(co, global_index);
+            }
 
             break;
         }
@@ -330,6 +381,9 @@ char* opcodeToString(uint8_t opcode){
         case OP_POP: return "POP";
         case OP_GET_GLOBAL: return "GET_GLOBAL";
         case OP_SET_GLOBAL: return "SET_GLOBAL";
+        case OP_GET_LOCAL: return "GET_LOCAL";
+        case OP_SET_LOCAL: return "SET_LOCAL";
+        case OP_SCOPE_EXIT: return "SCOPE_EXIT:";
         default: return "NOT IMPLEMENTED";
     }
 }
@@ -384,6 +438,24 @@ void Disassemble(CodeObject* co, Global* global){
         if(opcode == OP_SET_GLOBAL){
             printf("%-7u", args);
             printf("(%s)", Global_Get(global, args).name);
+            offset += 8;
+        }
+
+        if(opcode == OP_GET_LOCAL){
+            printf("%-7u", args);
+            // printf("(%s)", Global_Get(global, args).name);
+            offset += 8;
+        }
+
+        if(opcode == OP_SET_LOCAL){
+            printf("%-7u", args);
+            // printf("(%s)", Global_Get(global, args).name);
+            offset += 8;
+        }
+
+        if(opcode == OP_SCOPE_EXIT){
+            printf("%-7u", args);
+            // printf("(%s)", Global_Get(global, args).name);
             offset += 8;
         }
 
