@@ -16,12 +16,14 @@ typedef struct BinaryExpression BinaryExpression;
 typedef struct BinaryExpression ComparisonExpression;
 typedef struct Expression Expression;
 typedef struct IfStatement IfStatement;
+typedef struct WhileStatement WhileStatement;
 
 enum NodeType 
 {
     // Statements
     AST_BlockStatement,
     AST_IfStatement,
+    AST_WhileStatement,
     AST_VariableDeclaration,
     AST_TypeDefinition,
     AST_PropertyDeclaration,
@@ -49,6 +51,12 @@ struct IfStatement
     ComparisonExpression* test;
     Statement* consequent; // Statements
     Statement* alternate; // Statements
+};
+
+struct WhileStatement
+{
+    ComparisonExpression* test;
+    Statement* body;
 };
 
 struct Identifier 
@@ -127,6 +135,7 @@ struct Statement
         AssignmentExpression assignment_expression;
         BinaryExpression binary_expression;
         BinaryExpression comparison_expression;
+        WhileStatement while_statement;
     }; 
     NodeType type;
 };
@@ -234,6 +243,15 @@ IfStatement* Create_IfStatement(Statement* memory, ComparisonExpression* test, S
     memory->ifStatement.alternate = alternate;
 
     return (IfStatement*)memory;
+}
+
+WhileStatement* Create_WhileStatement(Statement* memory, ComparisonExpression* test, Statement* body)
+{
+    memory->type = AST_WhileStatement;
+    memory->while_statement.test = test;
+    memory->while_statement.body = body;
+
+    return (WhileStatement*)memory;
 }
 
 Identifier* Create_Identifier(Statement* memory, BufferString name)

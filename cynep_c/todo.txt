@@ -1,0 +1,1 @@
+Fixa så att lexer hanterar identifierare med en bokstav.

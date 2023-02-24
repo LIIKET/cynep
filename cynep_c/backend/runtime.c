@@ -457,6 +457,7 @@ RuntimeValue VM_Eval(VM* vm, CodeObject* co, Global* global){
             
             case OP_CMP:{
                 uint8_t cmp_type = VM_Read_Byte(vm);
+
                 RuntimeValue op2 = VM_Stack_Pop(vm);
                 RuntimeValue op1 = VM_Stack_Pop(vm);
                 bool res;
@@ -579,7 +580,7 @@ RuntimeValue VM_Eval(VM* vm, CodeObject* co, Global* global){
                 if(address < 0 ){ //|| address >= vm->stack_end
                     VM_Exception("Invalid variable index.");
                 }
-                // RuntimeValue value = Global_Get(global, address).value;
+
                 VM_Stack_Push(vm, &vm->bp[address]);
 
                 break;

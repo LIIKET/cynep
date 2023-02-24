@@ -17,6 +17,7 @@ Expression*             Parse_ComparisonExpression();
 Expression*             Parse_AdditiveExpression();
 Expression*             Parse_MultiplicativeExpression();
 IfStatement*            Parse_IfStatement();
+WhileStatement*         Parse_WhileStatement();
 BlockStatement*         Parse_BlockStatement();
 
 //
@@ -129,6 +130,9 @@ Statement* Parse_Statement()
         case Token_If: {
             return (Statement*)Parse_IfStatement();
         }
+        case Token_While: {
+            return (Statement*)Parse_WhileStatement();
+        }
         default: {
             return (Statement*)Parse_Expression();
         }
@@ -162,6 +166,24 @@ IfStatement* Parse_IfStatement()
     }
 
     return Create_IfStatement((Statement*)Seed_Memory(), test, consequtive, alternate);
+}
+
+WhileStatement* Parse_WhileStatement()
+{
+    Token if_token = Consume();
+    ConsumeExpect(Token_OpenParen, "While statement should be followed by an open parenthesis.");
+    ComparisonExpression* test = (ComparisonExpression*)Parse_ComparisonExpression();
+    ConsumeExpect(Token_CloseParen, "Missing close parenthesis in while statement.");
+    
+    Statement* body;
+    if(Current().type == Token_OpenBrace){
+        body = (Statement*)Parse_BlockStatement();
+    }
+    else{
+        // TODO: Parse single expression. Fuck this for now.
+    }
+
+    return Create_WhileStatement((Statement*)Seed_Memory(), test, body);
 }
 
 BlockStatement* Parse_BlockStatement(){

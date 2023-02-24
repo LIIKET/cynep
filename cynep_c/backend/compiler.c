@@ -17,7 +17,7 @@ CodeObject Compile(Statement* statement, Global* global){
     // TODO: Need a growing array for this
     co.code = malloc(sizeof(uint8_t) * 100000000); // TODO: DANGER! Handle memory! 100 000 000, Crashes if too many instructions
     co.constants = malloc(sizeof(RuntimeValue) * 100); // TODO: DANGER! Handle memory! 100 000 000, Crashes if too many constants
-    
+
     // Setup null, true and false consts. Compiler assumes this index order!
     co.constants[co.constants_last++] = RUNTIME_NULL();
     co.constants[co.constants_last++] = BOOLEAN(true);
@@ -25,7 +25,7 @@ CodeObject Compile(Statement* statement, Global* global){
 
 
     Gen(&co, statement, global);
-    
+
     Emit(&co, OP_HALT);
 
     int64 compile_end = timestamp();
@@ -131,6 +131,30 @@ void Gen(CodeObject* co, Statement* statement, Global* global){
             // Patch end of "if" address
             size_t end_branch_address = Get_Offset(co);
             Write_Address_At_Offset(co, end_address, end_branch_address);
+
+            break;
+        }
+
+        case AST_WhileStatement: {
+            WhileStatement expression = *(WhileStatement*)statement;
+
+            size_t loop_start_address = Get_Offset(co);
+
+            Gen(co, (Statement*)expression.test, global); // Emit test
+
+            Emit(co, OP_JMP_IF_FALSE); 
+            size_t loop_end_jmp_address = Get_Offset(co);
+            Emit64(co, 0);
+
+            Gen(co, (Statement*)expression.body, global); // Emit block
+
+            Emit(co, OP_JMP); 
+            size_t end_address = Get_Offset(co);
+            Emit64(co, loop_start_address);
+
+            // Patch end
+            size_t end_branch_address = Get_Offset(co);
+            Write_Address_At_Offset(co, loop_end_jmp_address, end_branch_address);
 
             break;
         }
@@ -407,7 +431,10 @@ void Disassemble(CodeObject* co, Global* global){
     size_t offset = 0;
     while(offset < co->code_last){
         uint8_t opcode = co->code[offset];
-        uint64_t args = co->code[offset + 1];
+        uint64_t args;
+
+        memcpy(&args, &co->code[offset + 1], sizeof(uint64_t));
+
         uint8_t small_args = co->code[offset + 1];
 
         char* opcode_string = opcodeToString(opcode);
