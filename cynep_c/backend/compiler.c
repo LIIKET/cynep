@@ -6,7 +6,7 @@ size_t      Numeric_Const_Index(CodeObject* co, float64 value);
 void        Gen(CodeObject* co, Statement* statement, Global* global);
 void        Emit(CodeObject* co, uint8_t code);
 void        Write_Address_At_Offset(CodeObject* co, size_t offset, uint64_t value);
-void        Write_Byte_At_Offset(CodeObject* co, size_t offset, uint8_t value);
+// void        Write_Byte_At_Offset(CodeObject* co, size_t offset, uint8_t value);
 void        Emit64(CodeObject* co, uint64_t value);
 int64       String_Const_Index(CodeObject* co, BufferString* string);
 
@@ -369,9 +369,9 @@ size_t Get_Offset(CodeObject* co){
     return co->code_last;
 }
 
-void Write_Byte_At_Offset(CodeObject* co, size_t offset, uint8_t value){
-    co->code[offset] = value;
-}
+// void Write_Byte_At_Offset(CodeObject* co, size_t offset, uint8_t value){
+//     co->code[offset] = value;
+// }
 
 // Writes 64 bit
 void Write_Address_At_Offset(CodeObject* co, size_t offset, uint64_t value){

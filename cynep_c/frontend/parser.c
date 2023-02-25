@@ -5,20 +5,19 @@ Token Current();
 Token Consume();
 Token ConsumeExpect(TokenType type, char* error);
 
-Statement*              Seed_Memory();
-Statement*              Parse_Statement();
-Expression*             Parse_Expression();
-VariableDeclaration*    Parse_VariableDeclaration();
-TypeDeclaration*        Parse_TypeDeclaration();
-Expression*             Parse_AssignmentExpression();
-Expression*             Parse_PrimaryExpression();
 
-Expression*             Parse_ComparisonExpression();
-Expression*             Parse_AdditiveExpression();
-Expression*             Parse_MultiplicativeExpression();
-IfStatement*            Parse_IfStatement();
-WhileStatement*         Parse_WhileStatement();
-BlockStatement*         Parse_BlockStatement();
+Statement*              Parse_Statement(MemPool* pool);
+Expression*             Parse_Expression(MemPool* pool);
+VariableDeclaration*    Parse_VariableDeclaration(MemPool* pool);
+TypeDeclaration*        Parse_TypeDeclaration(MemPool* pool);
+Expression*             Parse_AssignmentExpression(MemPool* pool);
+Expression*             Parse_PrimaryExpression(MemPool* pool);
+Expression*             Parse_ComparisonExpression(MemPool* pool);
+Expression*             Parse_AdditiveExpression(MemPool* pool);
+Expression*             Parse_MultiplicativeExpression(MemPool* pool);
+IfStatement*            Parse_IfStatement(MemPool* pool);
+WhileStatement*         Parse_WhileStatement(MemPool* pool);
+BlockStatement*         Parse_BlockStatement(MemPool* pool);
 
 //
 // Globals
@@ -26,14 +25,6 @@ BlockStatement*         Parse_BlockStatement();
 
 Token* _tokens = NULL;
 size_t _current_index = 0;
-
-size_t nodes_max = 10000000; // TODO: DANGER! Handle memory! 
-size_t nodes_count = 0;
-Statement* nodes = NULL;
-
-size_t list_nodes_max = 10000000; // TODO: DANGER! Handle memory! 
-size_t list_nodes_count = 0;
-SSNode* list_nodes = NULL;
 
 //
 //  Helpers
@@ -69,21 +60,6 @@ Token ConsumeExpect(TokenType type, char* error)
     return token;
 }
 
-Statement* Seed_Memory()
-{   
-    // TODO: This wont fly. Pointers are getting fucked up.
-    // Also, think about storing offsets instead of pointers for serialization purposes
-    if(nodes_count == nodes_max){
-        nodes_max *= 2;
-        nodes = (Statement*)realloc(nodes, sizeof(Statement) * nodes_max);
-    }
-
-    return &nodes[nodes_count++];
-}
-
-SSNode* Seed_SSNode_Memory(){
-    return &list_nodes[nodes_count++];
-}
 
 //
 //  Parsing
@@ -95,15 +71,20 @@ Statement* Build_SyntaxTree(Token* tokens)
 
     _tokens = tokens;
 
-    nodes = (Statement*)malloc(sizeof(Statement) * nodes_max);
-    list_nodes = (SSNode*)malloc(sizeof(SSNode) * list_nodes_max);
+    MemPool* pool = MemPool_Make(sizeof(Statement) * 10000000);
 
-    Statement* block = (Statement*)Create_BlockStatement(Seed_Memory(), (SSList*)Seed_SSNode_Memory());
+    MemPool_Record statement_mem = MemPool_GetMem(pool, sizeof(Statement));
+    MemPool_Record list_mem = MemPool_GetMem(pool, sizeof(SSList));
+
+    BlockStatement* block = Create_BlockStatement(statement_mem.pointer, list_mem.pointer);
 
     while(!End_Of_File()){
-        Statement* statement = Parse_Statement();
-        SSNode* node = SSNode_Create(Seed_SSNode_Memory(),statement);
-        SSList_Append(block->block_statement.body, node);
+        Statement* statement = Parse_Statement(pool);
+
+        MemPool_Record list_node_mem = MemPool_GetMem(pool, sizeof(SSNode));
+
+        SSNode* node = SSNode_Create(list_node_mem.pointer, statement);
+        SSList_Append(block->body, node);
     }
 
     int64 t2 = timestamp();
@@ -114,41 +95,41 @@ Statement* Build_SyntaxTree(Token* tokens)
     //     printf("%s\n", nodes[i].name);
     // }
 
-    return block;
+    return (Statement*)block;
 }
 
-Statement* Parse_Statement()
+Statement* Parse_Statement(MemPool* pool)
 {
     switch (Current().type)
     {
         case Token_Let: {
-            return (Statement*)Parse_VariableDeclaration();
+            return (Statement*)Parse_VariableDeclaration(pool);
         }
         case Token_Type: {
-            return (Statement*)Parse_TypeDeclaration();
+            return (Statement*)Parse_TypeDeclaration(pool);
         }
         case Token_If: {
-            return (Statement*)Parse_IfStatement();
+            return (Statement*)Parse_IfStatement(pool);
         }
         case Token_While: {
-            return (Statement*)Parse_WhileStatement();
+            return (Statement*)Parse_WhileStatement(pool);
         }
         default: {
-            return (Statement*)Parse_Expression();
+            return (Statement*)Parse_Expression(pool);
         }
     }
 }
 
-IfStatement* Parse_IfStatement()
+IfStatement* Parse_IfStatement(MemPool* pool)
 {
     Token if_token = Consume();
     ConsumeExpect(Token_OpenParen, "If statement should be followed by an open parenthesis.");
-    ComparisonExpression* test = (ComparisonExpression*)Parse_ComparisonExpression();
+    ComparisonExpression* test = (ComparisonExpression*)Parse_ComparisonExpression(pool);
     ConsumeExpect(Token_CloseParen, "Missing close parenthesis in if statement.");
     
     Statement* consequtive;
     if(Current().type == Token_OpenBrace){
-        consequtive = (Statement*)Parse_BlockStatement();
+        consequtive = (Statement*)Parse_BlockStatement(pool);
     }
     else{
         // TODO: Parse single expression. Fuck this for now.
@@ -158,49 +139,59 @@ IfStatement* Parse_IfStatement()
     if(Current().type == Token_Else){
         Consume();
         if(Current().type == Token_OpenBrace){
-            alternate = (Statement*)Parse_BlockStatement();
+            alternate = (Statement*)Parse_BlockStatement(pool);
         }
         else{
             // TODO: Parse single expression. Fuck this for now.
         }
     }
 
-    return Create_IfStatement((Statement*)Seed_Memory(), test, consequtive, alternate);
+    MemPool_Record statement_mem = MemPool_GetMem(pool, sizeof(Statement));
+    return Create_IfStatement(statement_mem.pointer, test, consequtive, alternate);
 }
 
-WhileStatement* Parse_WhileStatement()
+WhileStatement* Parse_WhileStatement(MemPool* pool)
 {
     Token if_token = Consume();
     ConsumeExpect(Token_OpenParen, "While statement should be followed by an open parenthesis.");
-    ComparisonExpression* test = (ComparisonExpression*)Parse_ComparisonExpression();
+    ComparisonExpression* test = (ComparisonExpression*)Parse_ComparisonExpression(pool);
     ConsumeExpect(Token_CloseParen, "Missing close parenthesis in while statement.");
     
     Statement* body;
     if(Current().type == Token_OpenBrace){
-        body = (Statement*)Parse_BlockStatement();
+        body = (Statement*)Parse_BlockStatement(pool);
     }
     else{
         // TODO: Parse single expression. Fuck this for now.
     }
 
-    return Create_WhileStatement((Statement*)Seed_Memory(), test, body);
+    MemPool_Record statement_mem = MemPool_GetMem(pool, sizeof(Statement));
+    return Create_WhileStatement(statement_mem.pointer, test, body);
 }
 
-BlockStatement* Parse_BlockStatement(){
+BlockStatement* Parse_BlockStatement(MemPool* pool){
     Consume(); // Open brace
-    BlockStatement* block = Create_BlockStatement(Seed_Memory(), (SSList*)Seed_SSNode_Memory());
+
+    MemPool_Record statement_mem = MemPool_GetMem(pool, sizeof(Statement));
+    MemPool_Record list_mem = MemPool_GetMem(pool, sizeof(SSList));
+
+    BlockStatement* block = Create_BlockStatement(statement_mem.pointer, list_mem.pointer);
 
     while(Current().type != Token_CloseBrace){
-        Statement* statement = Parse_Statement();
-        SSNode* node = SSNode_Create(Seed_SSNode_Memory(),statement);
+        Statement* statement = Parse_Statement(pool);
+
+        MemPool_Record list_node_mem = MemPool_GetMem(pool, sizeof(SSNode));
+        SSNode* node = SSNode_Create(list_node_mem.pointer, statement);
+
         SSList_Append(block->body, node);
     }
+
     ConsumeExpect(Token_CloseBrace, "Missing close brace in block.");
 
     return block;
 }
 
-VariableDeclaration* Parse_VariableDeclaration()
+VariableDeclaration* Parse_VariableDeclaration(MemPool* pool)
 {
     // var {identifier} : {type} = {expression};
     // var {identifier};
@@ -209,32 +200,45 @@ VariableDeclaration* Parse_VariableDeclaration()
 
     if(Current().type == Token_Semicolon){
         Consume();
-        return Create_VariableDeclaration((Statement*)Seed_Memory(), identifier.string_value, NULL);
+
+        MemPool_Record statement_mem = MemPool_GetMem(pool, sizeof(Statement));
+
+        return Create_VariableDeclaration(statement_mem.pointer, identifier.string_value, NULL);
     }
     else{
         ConsumeExpect(Token_Assignment, "Identifier in var declaration should be followed by an equals token.");
-        Expression* expression = Parse_Expression();
+        Expression* expression = Parse_Expression(pool);
         
         ConsumeExpect(Token_Semicolon, "Variable declaration must end with semicolon.");
-        return Create_VariableDeclaration((Statement*)Seed_Memory(), identifier.string_value, expression);
+
+        MemPool_Record statement_mem = MemPool_GetMem(pool, sizeof(Statement));
+        
+        return Create_VariableDeclaration(statement_mem.pointer, identifier.string_value, expression);
     }
 }
 
-TypeDeclaration* Parse_TypeDeclaration()
+TypeDeclaration* Parse_TypeDeclaration(MemPool* pool)
 {
     Token type_token = Consume();
     Token identifier = ConsumeExpect(Token_Identifier, "Type keyword should be followed by an identifier.");
     ConsumeExpect(Token_Assignment, "Error in type declaration");
     ConsumeExpect(Token_OpenBrace, "Error in type declaration");
 
-    TypeDeclaration* type_declaration = Create_TypeDeclaration(Seed_Memory(), (SSList*)Seed_SSNode_Memory() ,identifier.string_value);
+    MemPool_Record statement_mem = MemPool_GetMem(pool, sizeof(Statement));
+    MemPool_Record list_mem = MemPool_GetMem(pool, sizeof(SSList));
+
+    TypeDeclaration* type_declaration = Create_TypeDeclaration(statement_mem.pointer, list_mem.pointer, identifier.string_value);
 
     while(!End_Of_File() && Current().type != Token_CloseBrace){
         Token property_identifier = ConsumeExpect(Token_Identifier, "Error in type declaration");
         ConsumeExpect(Token_Semicolon, "Error in type declaration");
-        PropertyDeclaration* property_declaration = Create_PropertyDeclaration(Seed_Memory(), property_identifier.string_value);
 
-        SSNode* node = SSNode_Create(Seed_SSNode_Memory(),property_declaration);
+        MemPool_Record statement_mem = MemPool_GetMem(pool, sizeof(Statement));
+        MemPool_Record list_node_mem = MemPool_GetMem(pool, sizeof(SSNode));
+
+        PropertyDeclaration* property_declaration = Create_PropertyDeclaration(statement_mem.pointer, property_identifier.string_value);
+
+        SSNode* node = SSNode_Create(list_node_mem.pointer, property_declaration);
         SSList_Append(type_declaration->properties, node);
     }
 
@@ -243,9 +247,9 @@ TypeDeclaration* Parse_TypeDeclaration()
     return type_declaration;
 }
 
-Expression* Parse_Expression()
+Expression* Parse_Expression(MemPool* pool)
 {
-    return (Expression*)Parse_AssignmentExpression();
+    return (Expression*)Parse_AssignmentExpression(pool);
 }
 
 
@@ -262,24 +266,27 @@ Expression* Parse_Expression()
 // MemberExpression             [X]
 // PrimaryExpression            [X]
 
-Expression* Parse_AssignmentExpression()
+Expression* Parse_AssignmentExpression(MemPool* pool)
 {
-    Expression* left = Parse_ComparisonExpression();
+    Expression* left = Parse_ComparisonExpression(pool);
 
     if(Current().type == Token_Assignment)
     {
         Consume();
-        Expression* value = Parse_ComparisonExpression();
+        Expression* value = Parse_ComparisonExpression(pool);
         ConsumeExpect(Token_Semicolon, "Variable assignment must end with semicolon.");
-        return (Expression*)Create_AssignmentExpression(Seed_Memory(), left, value);
+
+        MemPool_Record statement_mem = MemPool_GetMem(pool, sizeof(Statement));
+
+        return (Expression*)Create_AssignmentExpression(statement_mem.pointer, left, value);
     }
 
     return left;
 }
 
-Expression* Parse_ComparisonExpression()
+Expression* Parse_ComparisonExpression(MemPool* pool)
 {
-    Expression* left = Parse_AdditiveExpression();
+    Expression* left = Parse_AdditiveExpression(pool);
 
     while (0 == strncmp(Current().operator_value,"==", 2)
         || 0 == strncmp(Current().operator_value,"!=", 2)  
@@ -289,8 +296,11 @@ Expression* Parse_ComparisonExpression()
         || 0 == strncmp(Current().operator_value,"<" , 2))
     {
         char* operator = Consume().operator_value;
-        Expression* right = Parse_AdditiveExpression();
-        left = (Expression*)Create_ComparisonExpression(Seed_Memory(), left, operator, right);
+        Expression* right = Parse_AdditiveExpression(pool);
+
+        MemPool_Record statement_mem = MemPool_GetMem(pool, sizeof(Statement));
+
+        left = (Expression*)Create_ComparisonExpression(statement_mem.pointer, left, operator, right);
 
         // TODO: Should be possible to do type checking here
     }
@@ -298,15 +308,18 @@ Expression* Parse_ComparisonExpression()
     return left;
 }
 
-Expression* Parse_AdditiveExpression()
+Expression* Parse_AdditiveExpression(MemPool* pool)
 {
-    Expression* left = Parse_MultiplicativeExpression();
+    Expression* left = Parse_MultiplicativeExpression(pool);
 
     while (0 == strcmp(Current().operator_value,"+") || 0 == strcmp(Current().operator_value,"-"))
     {
         char* operator = Consume().operator_value;
-        Expression* right = Parse_MultiplicativeExpression();
-        left = (Expression*)Create_BinaryExpression(Seed_Memory(), left, operator, right);
+        Expression* right = Parse_MultiplicativeExpression(pool);
+
+        MemPool_Record statement_mem = MemPool_GetMem(pool, sizeof(Statement));
+
+        left = (Expression*)Create_BinaryExpression(statement_mem.pointer, left, operator, right);
 
         // TODO: Should be possible to do type checking here
     }
@@ -314,43 +327,49 @@ Expression* Parse_AdditiveExpression()
     return left;
 }
 
-Expression* Parse_MultiplicativeExpression()
+Expression* Parse_MultiplicativeExpression(MemPool* pool)
 {
-    Expression* left = Parse_PrimaryExpression();
+    Expression* left = Parse_PrimaryExpression(pool);
 
     while (0 == strcmp(Current().operator_value,"*") 
         || 0 == strcmp(Current().operator_value,"/") 
         || 0 == strcmp(Current().operator_value,"%"))
     {
         char* operator = Consume().operator_value;
-        Expression* right = Parse_PrimaryExpression();
-        left = (Expression*)Create_BinaryExpression(Seed_Memory(), left, operator, right);
+        Expression* right = Parse_PrimaryExpression(pool);
+
+        MemPool_Record statement_mem = MemPool_GetMem(pool, sizeof(Statement));
+
+        left = (Expression*)Create_BinaryExpression(statement_mem.pointer, left, operator, right);
     }
 
     return left;
 }
 
-Expression* Parse_PrimaryExpression()
+Expression* Parse_PrimaryExpression(MemPool* pool)
 {
     Token token = Current();
 
     switch (token.type) { 
         case Token_Identifier:
             {
-                return (Expression*)Create_Identifier(Seed_Memory(), Consume().string_value);
+                MemPool_Record statement_mem = MemPool_GetMem(pool, sizeof(Statement));
+                return (Expression*)Create_Identifier(statement_mem.pointer, Consume().string_value);
             }
         case Token_Number:
             {
-                return (Expression*)Create_NumericLiteral(Seed_Memory(), Consume().number_value); //atoi(Consume().value)
+                MemPool_Record statement_mem = MemPool_GetMem(pool, sizeof(Statement));
+                return (Expression*)Create_NumericLiteral(statement_mem.pointer, Consume().number_value); //atoi(Consume().value)
             }
         case Token_String:
             {     
-                return (Expression*)Create_StringLiteral(Seed_Memory(), Consume().string_value); //atoi(Consume().value)
+                MemPool_Record statement_mem = MemPool_GetMem(pool, sizeof(Statement));
+                return (Expression*)Create_StringLiteral(statement_mem.pointer, Consume().string_value); //atoi(Consume().value)
             }
         case Token_OpenParen:
             {
                 Consume(); // Throw away open paren
-                Expression* expression = Parse_Expression();
+                Expression* expression = Parse_Expression(pool);
                 ConsumeExpect(Token_CloseParen, "Error in primary expression"); // Throw away close paren
 
                 return expression;
