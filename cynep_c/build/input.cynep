@@ -1,4 +1,45 @@
-var it = 0;
-while(it < 1000000){
-    it = it + 1;
+var string = "Hello" + " Sailor!" + " Figaro!" + " Cigaro!";
+var number = 123;
+var nullis = null;
+var str = "aphjärna";
+var d = str;
+
+var nullis = null;
+
+if(10 * 2 > 30){
+    if(999 <= 99){
+        500 / 2
+    }
+
+    if(999 <= 99){
+        350
+    }
+
+    1000
+}
+else{
+    var apa = (123 + 5) * 2;
+    apa = null;
+}
+
+
+
+var c = str + d;
+
+var nullis = "ap";
+
+str = "blabla";
+
+if(1 == 1){
+    var bult = "yes";
+
+    if(true){
+        var hej = "cooool!";
+    }
+}
+
+var i = 0;
+while(i < 100){
+    i = i + 1;
+    var string = "Hello" + " Sailor!";
 }

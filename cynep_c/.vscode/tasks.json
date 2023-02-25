@@ -8,7 +8,7 @@
                 "cwd": "${workspaceFolder}"
             },
             "windows": {
-                "command": "${cwd}\\build.bat"
+                "command": "${cwd}\\build-debug.bat"
             }
         },
         {

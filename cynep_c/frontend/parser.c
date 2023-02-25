@@ -281,12 +281,12 @@ Expression* Parse_ComparisonExpression()
 {
     Expression* left = Parse_AdditiveExpression();
 
-    while (0 == strcmp(Current().operator_value,"==")
-        || 0 == strcmp(Current().operator_value,"!=")  
-        || 0 == strcmp(Current().operator_value,">" )
-        || 0 == strcmp(Current().operator_value,">=") 
-        || 0 == strcmp(Current().operator_value,"<" )
-        || 0 == strcmp(Current().operator_value,"<="))
+    while (0 == strncmp(Current().operator_value,"==", 2)
+        || 0 == strncmp(Current().operator_value,"!=", 2)  
+        || 0 == strncmp(Current().operator_value,">=", 2) 
+        || 0 == strncmp(Current().operator_value,"<=", 2)
+        || 0 == strncmp(Current().operator_value,">" , 2)
+        || 0 == strncmp(Current().operator_value,"<" , 2))
     {
         char* operator = Consume().operator_value;
         Expression* right = Parse_AdditiveExpression();

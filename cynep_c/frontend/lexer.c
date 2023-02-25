@@ -168,7 +168,7 @@ Token* lexer_tokenize(SourceFile* file)
             {   
                 if(*lookahead == '=')
                 {
-                    Token_Operator_Create(&tokens[tokens_count++], Token_ComparisonOperator, current_and_lookahead_as_string);  
+                    Token_Operator_Create(&tokens[tokens_count++], Token_ComparisonOperator, current_and_lookahead_as_string);                  
                     iterator++;
                 }
                 else{
@@ -247,23 +247,23 @@ Token* lexer_tokenize(SourceFile* file)
                     iterator += length - 1; // Reduce by one cause we also increment at the end of loop
 
                     // Check for reserved keywords
-                    if(strncmp(current, "type", length) == 0)
+                    if(length == 4 && strncmp(current, "type", length) == 0)
                     {
                         Token_Create(&tokens[tokens_count++], Token_Type, current, length); 
                     }
-                    else if(strncmp(current, "var", length) == 0)
+                    else if(length == 3 && strncmp(current, "var", length) == 0)
                     {
                         Token_Create(&tokens[tokens_count++], Token_Let, current, length); 
                     }
-                    else if(strncmp(current, "if", length) == 0)
+                    else if(length == 2 && strncmp(current, "if", length) == 0)
                     {
                         Token_Create(&tokens[tokens_count++], Token_If, current, length); 
                     }
-                    else if(strncmp(current, "else", length) == 0)
+                    else if(length == 4 && strncmp(current, "else", length) == 0)
                     {
                         Token_Create(&tokens[tokens_count++], Token_Else, current, length); 
                     }
-                    else if(strncmp(current, "while", length) == 0)
+                    else if(length == 5 && strncmp(current, "while", length) == 0)
                     {
                         Token_Create(&tokens[tokens_count++], Token_While, current, length); 
                     }
@@ -299,8 +299,8 @@ Token* lexer_tokenize(SourceFile* file)
 
     // for (size_t i = 0; i < tokens_count; i++)
     // {
-    //     printf("%s", tokens[i].operator);
-    //     printf("%i %.*s\n", tokens[i].type, (int)tokens[i].token_str.length, tokens[i].token_str.start);
+    //     printf("%c%c\n", tokens[i].operator_value[0], tokens[i].operator_value[1]);
+    //     //printf("%i %.*s\n", tokens[i].type, (int)tokens[i].string_value.length, tokens[i].string_value.start);
     // }
     
     int64 t2 = timestamp();

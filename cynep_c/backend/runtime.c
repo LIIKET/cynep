@@ -308,6 +308,8 @@ Global* Create_Global(){
     global->globals = malloc(sizeof(GlobalVar) * 10); // TODO: DANGER! Handle memory when adding
     global->globals_max = 10;
     global->globals_size = 0;
+
+    return global;
 }
 
 #pragma endregion
