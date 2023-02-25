@@ -11,6 +11,7 @@ typedef struct CodeObject CodeObject;
 typedef struct GlobalVar GlobalVar;
 typedef struct Global Global;
 typedef struct LocalVar LocalVar;
+typedef struct NativeFunctionObject NativeFunctionObject;
 
 RuntimeValue    VM_Eval(VM* vm, CodeObject* co, Global* global);
 RuntimeValue    VM_Stack_Peek(VM* vm, size_t offset);
@@ -34,7 +35,8 @@ enum ValueType
 enum ObjectType 
 {
     ObjectType_String,
-    ObjectType_Code
+    ObjectType_Code,
+    ObjectType_NativeFunction
 };
 
 struct RuntimeValue 
@@ -57,6 +59,14 @@ struct StringObject
 {
     Object object;
     char* string;
+};
+
+struct NativeFunctionObject
+{
+    Object object; 
+    void* func_ptr;
+    char* name;
+    size_t arity;
 };
 
 struct CodeObject 
@@ -117,6 +127,7 @@ struct VM
 
 #define AS_STRING(value) (*(StringObject*)value.object)
 #define AS_CODE(value) (*(CodeObject*)value.object)
+#define AS_NATIVE_FUNCTION(value) (*(NativeFunctionObject*)value.object)
 #define AS_NUMBER(value) (*(float64*)value.number)
 #define AS_BOOLEAN(value) (*(bool*)value.boolean)
 
@@ -163,6 +174,21 @@ RuntimeValue Alloc_String(char* value){
     stringObject->string = value;
     result.object = (Object*)stringObject;
     
+    return result;
+}
+
+RuntimeValue Alloc_NativeFunction(void* func, char* name, size_t arity){
+    RuntimeValue result;
+    result.type = ValueType_Object;
+
+    NativeFunctionObject* stringObject = malloc(sizeof(NativeFunctionObject));
+
+    stringObject->object.objectType = ObjectType_NativeFunction;
+    stringObject->arity = arity;
+    stringObject->func_ptr = func;
+    stringObject->name = name;
+
+    result.object = (Object*)stringObject;
     return result;
 }
 
@@ -303,6 +329,20 @@ void Global_Add(Global* global, char* name, RuntimeValue value){
     global->globals_size++;
 }
 
+void Global_AddNativeFunction(Global* global, char* name, void* func_ptr, size_t arity){
+    if(Global_GetIndex(global, name) != -1){
+        return;
+    }
+
+    RuntimeValue function = Alloc_NativeFunction(func_ptr, name, arity);
+   
+    GlobalVar* var = &global->globals[global->globals_size];
+    var->name = name;
+    var->value = function;
+
+    global->globals_size++;
+}
+
 Global* Create_Global(){
     Global* global = malloc(sizeof(Global));
     global->globals = malloc(sizeof(GlobalVar) * 10); // TODO: DANGER! Handle memory when adding
@@ -366,6 +406,7 @@ void Local_Define(CodeObject* co, BufferString* name){
 #define OP_GET_LOCAL        0x0C
 #define OP_SET_LOCAL        0x0D
 #define OP_SCOPE_EXIT       0x0E
+#define OP_CALL             0x0F
 
 #define OP_CMP_GT           0x01
 #define OP_CMP_LT           0x02
@@ -606,6 +647,31 @@ RuntimeValue VM_Eval(VM* vm, CodeObject* co, Global* global){
                     // Pop back to before scope
                     vm->sp -= count;
                 }
+                break;
+            }
+
+            case OP_CALL:{
+                uint64_t arg_count = VM_Read_Address(vm);
+                RuntimeValue function = VM_Stack_Peek(vm, arg_count);
+
+                if(function.type == ValueType_Object && function.object->objectType == ObjectType_NativeFunction){
+                    NativeFunctionObject fn = AS_NATIVE_FUNCTION(function);
+
+                    RuntimeValue args[arg_count];
+
+                    for (size_t i = 0; i < arg_count; i++)
+                    {
+                        args[i] = VM_Stack_Pop(vm);
+                    }
+
+                    VM_Stack_Pop(vm); // Pop the function
+
+                    RuntimeValue (*fun_ptr)() = fn.func_ptr; // Function pointer
+                    RuntimeValue res = (*fun_ptr)(arg_count, &args); // Invoke
+                    
+                    VM_Stack_Push(vm, &res); // Push the result
+                }
+
                 break;
             }
 

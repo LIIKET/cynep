@@ -14,6 +14,7 @@ struct SSList
 {
     SSNode* first;
     SSNode* last;
+    size_t count;
 };
 
 void SSList_Append(SSList* list, SSNode* node)
@@ -27,12 +28,15 @@ void SSList_Append(SSList* list, SSNode* node)
 
     node->prev = list->last;
     list->last = node;
+
+    list->count++;
 }
 
 SSList* SSList_Create(SSList* list)
 {
     list->first = NULL;
     list->last = NULL;
+    list->count = 0;
 
     return list;
 }

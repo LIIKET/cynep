@@ -95,14 +95,13 @@ struct TypeDeclaration
 struct CallExpression 
 {
     Expression* callee;
-    Expression* args[2];
-    int64 args_count;
+    SSList* args;
 };
 
 struct MemberExpression 
 {
-    Statement* object;
-    Identifier* property;
+    Expression* object;
+    Identifier* member;
 };
 
 struct AssignmentExpression 
@@ -188,18 +187,20 @@ PropertyDeclaration* Create_PropertyDeclaration(Statement* memory, BufferString 
     return (PropertyDeclaration*)memory;
 }
 
-CallExpression* Create_CallExpression(Statement* memory, Statement* calee)
+CallExpression* Create_CallExpression(Statement* memory, Expression* callee, SSList* args)
 {
     memory->type = AST_CallExpression;
+    memory->call_expression.callee = callee;
+    memory->call_expression.args = args;
 
     return (CallExpression*)memory;
 }
 
-MemberExpression* Create_MemberExpression(Statement* memory, Statement* object, Identifier* property)
+MemberExpression* Create_MemberExpression(Statement* memory, Expression* object, Identifier* member)
 {
     memory->type = AST_MemberExpression;
     memory->member_expression.object = object;
-    memory->member_expression.property = property;
+    memory->member_expression.member = member;
 
     return (MemberExpression*)memory;
 }
@@ -331,6 +332,26 @@ SSList* Get_Children(Statement* expression)
 
             break;
         }
+        case AST_CallExpression:
+        {
+            CallExpression* node = (CallExpression*)expression;
+
+            SSNode* left_node = SSNode_Create(malloc(sizeof(SSNode)), node->callee);
+            SSList_Append(list, left_node);
+
+            if(node->args->first != NULL){
+                SSNode* cursor = node->args->first;
+                while(cursor != NULL){
+                    SSNode* arg_node = SSNode_Create(malloc(sizeof(SSNode)), cursor->value);
+                    SSList_Append(list, arg_node);
+                    cursor = cursor->next;
+                }
+            }
+
+            
+
+            break;
+        }
         case AST_BinaryExpression:
         {
             BinaryExpression* node = (BinaryExpression*)expression;
@@ -373,13 +394,22 @@ SSList* Get_Children(Statement* expression)
         }
         case AST_MemberExpression:
         {
-            break;
-        }
-        case AST_CallExpression:
-        {
+            MemberExpression* node = (MemberExpression*)expression;
+
+            SSNode* right_node = SSNode_Create(malloc(sizeof(SSNode)), node->object);
+            SSList_Append(list, right_node);
+
+            SSNode* left_node = SSNode_Create(malloc(sizeof(SSNode)), node->member);
+            SSList_Append(list, left_node);
+
             break;
         }
         case AST_NumericLiteral:
+        {
+            // Cannot have children. Don't add anything.
+            break;
+        }
+        case AST_StringLiteral:
         {
             // Cannot have children. Don't add anything.
             break;
@@ -448,10 +478,21 @@ void Print_Node(Statement* node)
             printf("CallExpression");   
             break;    
         }
+        case AST_WhileStatement:
+        {
+            printf("WhileStatement");   
+            break;    
+        }
         case AST_NumericLiteral:
         {
             NumericLiteral* item = (NumericLiteral*)node;
             printf("NumericLiteral: %i", item->value);
+            break;    
+        }
+        case AST_StringLiteral:
+        {
+            StringLiteral* item = (StringLiteral*)node;
+            printf("StringLiteral: %.*s", item->value.length, item->value.start);
             break;    
         }
         case AST_Identifier:
@@ -486,13 +527,7 @@ void Print_AST_Node(Statement* node, char* indent, bool isLast){
     strcpy(new_indent, indent);
 
     if(isLast)
-    {
         strcat(new_indent, "    ");     
-
-        // if(children->first != NULL){
-        //     printf("%s│\n", new_indent);
-        // }
-    }
     else
         strcat(new_indent, "│   ");
 

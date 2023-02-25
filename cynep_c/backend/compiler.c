@@ -196,8 +196,6 @@ void Gen(CodeObject* co, Statement* statement, Global* global){
                 co->scope_level--;
             }
 
-
-
             break;
         }
 
@@ -320,6 +318,40 @@ void Gen(CodeObject* co, Statement* statement, Global* global){
 
             break;
         }
+
+        case AST_CallExpression:{
+            CallExpression callExpression = *(CallExpression*)statement; 
+
+            // Emit function
+            Gen(co, (Statement*)callExpression.callee, global);
+
+            // Valitade arity
+            
+            // TODO: IMMPORTANT! Read back 64 bit. 
+            uint8_t address = co->code[co->code_last - 8]; // Read back function global address
+            NativeFunctionObject native_fn = AS_NATIVE_FUNCTION(Global_Get(global, address).value);
+
+            if(native_fn.arity != callExpression.args->count){
+                printf("\033[0;31mCompiler: Reference error. Arity mismatch. \033[0m\n");
+                exit(0);
+            }
+
+            //RuntimeValue asd = co->code[co->code_last - 1];
+
+            SSNode* cursor = callExpression.args->first;
+
+            while (cursor != NULL)
+            {
+                Gen(co, (Statement*)cursor->value, global);
+                cursor = cursor->next;
+            }
+
+            Emit(co, OP_CALL);
+            Emit64(co, callExpression.args->count);
+            
+            break;
+        }
+
         default: {
             printf("\033[0;31mCompiler error: Unknown AST node \033[0m\n");
             exit(0);
@@ -403,6 +435,7 @@ char* opcodeToString(uint8_t opcode){
         case OP_JMP_IF_FALSE: return "JMP_IF_FALSE";
         case OP_JMP: return "JMP";
         case OP_POP: return "POP";
+        case OP_CALL: return "CALL";
         case OP_GET_GLOBAL: return "GET_GLOBAL";
         case OP_SET_GLOBAL: return "SET_GLOBAL";
         case OP_GET_LOCAL: return "GET_LOCAL";
@@ -488,6 +521,11 @@ void Disassemble(CodeObject* co, Global* global){
 
         if(opcode == OP_JMP){
             printf("0x%04X", args);
+            offset += 8;
+        }
+
+        if(opcode == OP_CALL){
+            printf("%-7u", args);
             offset += 8;
         }
 

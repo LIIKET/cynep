@@ -30,6 +30,16 @@ bool arg(int argc, char**argv, char* search){
     return false;
 }
 
+RuntimeValue Multiply(size_t argc, RuntimeValue* argv){
+
+    RuntimeValue arg1 = argv[0];
+    RuntimeValue arg2 = argv[1];
+
+    float64 result = arg1.number * arg2.number;
+
+    return NUMBER(result);
+}
+
 int main(int argc, char**argv) 
 {
     bool show_ast = arg(argc, argv, "-ast");
@@ -43,8 +53,9 @@ int main(int argc, char**argv)
 
     // Setup global object
     Global* global = Create_Global();
-    Global_Add(global, "leet", NUMBER(1337));
-    Global_Add(global, "y", NUMBER(7331));
+    Global_Add(global, "VERSION", NUMBER(0.1));
+    Global_AddNativeFunction(global, "multiply", &Multiply, 2);
+
 
 
     // Compile

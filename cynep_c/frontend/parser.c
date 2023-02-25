@@ -19,6 +19,12 @@ IfStatement*            Parse_IfStatement(MemPool* pool);
 WhileStatement*         Parse_WhileStatement(MemPool* pool);
 BlockStatement*         Parse_BlockStatement(MemPool* pool);
 
+Expression* Parse_CallMemberExpression(MemPool* pool);
+CallExpression* Parse_CallExpression(MemPool* pool, Expression* caller);
+Expression* Parse_MemberExpression(MemPool* pool);
+SSList* Parse_Args(MemPool* pool);
+SSList* Parse_ArgumentsList(MemPool* pool, SSList* args);
+
 //
 // Globals
 //
@@ -329,14 +335,14 @@ Expression* Parse_AdditiveExpression(MemPool* pool)
 
 Expression* Parse_MultiplicativeExpression(MemPool* pool)
 {
-    Expression* left = Parse_PrimaryExpression(pool);
+    Expression* left = Parse_CallMemberExpression(pool);
 
     while (0 == strcmp(Current().operator_value,"*") 
         || 0 == strcmp(Current().operator_value,"/") 
         || 0 == strcmp(Current().operator_value,"%"))
     {
         char* operator = Consume().operator_value;
-        Expression* right = Parse_PrimaryExpression(pool);
+        Expression* right = Parse_CallMemberExpression(pool);
 
         MemPool_Record statement_mem = MemPool_GetMem(pool, sizeof(Statement));
 
@@ -345,6 +351,99 @@ Expression* Parse_MultiplicativeExpression(MemPool* pool)
 
     return left;
 }
+
+//
+//  CallExpression
+//
+
+Expression* Parse_CallMemberExpression(MemPool* pool){
+    Expression* member = Parse_MemberExpression(pool);
+
+    if (Current().type == Token_OpenParen)
+    {
+        return (Expression*)Parse_CallExpression(pool, member);
+    }
+
+    return member; 
+}
+
+CallExpression* Parse_CallExpression(MemPool* pool, Expression* caller){
+
+    MemPool_Record memory = MemPool_GetMem(pool, sizeof(Statement));
+    CallExpression* call_expr = Create_CallExpression(memory.pointer, caller, Parse_Args(pool));
+
+    if(Current().type == Token_OpenParen){
+        call_expr = Parse_CallExpression(pool, caller);
+    }
+
+    return call_expr;
+}
+
+SSList* Parse_Args(MemPool* pool)
+{
+    ConsumeExpect(Token_OpenParen, "Args must start with open paren.");
+    MemPool_Record memory = MemPool_GetMem(pool, sizeof(SSList));
+    SSList* args = SSList_Create(memory.pointer);  
+
+    if(Current().type == Token_CloseParen)
+    {
+        int a = 0;
+    }
+    else
+    {
+        args = Parse_ArgumentsList(pool, args);
+    }
+
+    ConsumeExpect(Token_CloseParen, "Args must end with close paren.");
+
+    return args;
+}
+
+SSList* Parse_ArgumentsList(MemPool* pool, SSList* args)
+{
+    MemPool_Record node_mem = MemPool_GetMem(pool, sizeof(SSNode));
+    Expression* expr = Parse_AssignmentExpression(pool);
+    SSNode* node = SSNode_Create(node_mem.pointer, expr);
+    SSList_Append(args, node);
+
+    while (Current().type == Token_Comma)
+    {
+        Consume();
+
+        MemPool_Record node_mem = MemPool_GetMem(pool, sizeof(SSNode));
+        Expression* expr = Parse_AssignmentExpression(pool);
+        SSNode* node = SSNode_Create(node_mem.pointer, expr);
+        SSList_Append(args, node);
+    }
+
+    return args;
+}
+
+Expression* Parse_MemberExpression(MemPool* pool)
+{
+    Expression* obj = Parse_PrimaryExpression(pool);
+
+    while (Current().type == Token_Dot)
+    {
+        Consume(); // Eat dot
+        Expression* member = Parse_PrimaryExpression(pool);
+
+        if (member->statement.type != AST_Identifier)
+        {
+            printf("Dot operator requires identifier on right hand");
+            exit(0);
+        }
+
+        MemPool_Record mem = MemPool_GetMem(pool, sizeof(Statement));
+        obj = (Expression*)Create_MemberExpression(mem.pointer, obj, (Identifier*)member);
+    }
+
+    return obj;
+}
+
+//
+//  End CallExpression
+//
 
 Expression* Parse_PrimaryExpression(MemPool* pool)
 {
@@ -377,7 +476,7 @@ Expression* Parse_PrimaryExpression(MemPool* pool)
         default:
             {
                 printf("Unexpected token in parser.");
-                // printf("Unexpected token in parser: \"%s\"\n", Current().value);
+                 printf("Unexpected token in parser: \"%s\"\n", Current().string_value);
                 exit(0);
             }
     }
