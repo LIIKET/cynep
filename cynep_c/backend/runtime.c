@@ -21,6 +21,7 @@ uint8_t         VM_Peek_Byte(VM* vm);
 uint64_t        VM_Read_Address(VM* vm);
 void            VM_Stack_Push(VM* vm, RuntimeValue* value);
 void            VM_Exception(char* msg);
+void VM_DumpStack(VM* vm);
 
 #pragma region TYPES
 
@@ -159,6 +160,12 @@ char* RuntimeValue_ToString(RuntimeValue value){
         char* buf = malloc(sizeof(char) * buff_size);
         strcpy(buf, str.string);
         return buf;
+    }
+    if(value.type == ValueType_Object && value.object->objectType == ObjectType_NativeFunction){
+        // StringObject str = AS_STRING(value);
+        // char* buf = malloc(sizeof(char) * buff_size);
+        // strcpy(buf, str.string);
+        return "(Native function)";
     }
 
     return "VM: ToString not implemented";
@@ -444,6 +451,9 @@ RuntimeValue VM_Eval(VM* vm, CodeObject* co, Global* global){
 
     while(true){
         uint8_t opcode = VM_Read_Byte(vm);
+
+        // Introspect stack for debugging
+        // VM_DumpStack(vm);
 
         switch (opcode)
         {
@@ -731,6 +741,22 @@ RuntimeValue VM_Stack_Peek(VM* vm, size_t offset){
 void VM_Exception(char* msg){
     printf("\033[0;31mVM: %s \033[0m\n", msg);
     exit(0);
+}
+
+void VM_DumpStack(VM* vm){
+    printf("---------- STACK ------------\n");
+    if(vm->sp == vm->stack){
+        printf("(empty)\n");
+    }
+    else{
+        RuntimeValue* csp = vm->stack;
+        while(csp < vm->sp){
+            char* asd = RuntimeValue_ToString(*csp++);
+
+            printf("%s\n", asd);
+            // *csp--;
+        }
+    }
 }
 
 #pragma endregion

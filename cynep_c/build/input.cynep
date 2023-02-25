@@ -1,10 +1,10 @@
-var i = 0;
-var result = 1;
+if(true){
+    var i = 3;
 
-while(i < 500000){
-    var a = "Hello" + " Sailor!";
+    multiply(i,3)
 
-    i = i + 1;
-    
-    result = multiply(result, 2);
+    if(true){
+        var apa = 123;
+    }
 }
+
