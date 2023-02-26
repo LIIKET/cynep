@@ -12,6 +12,7 @@ typedef struct GlobalVar GlobalVar;
 typedef struct Global Global;
 typedef struct LocalVar LocalVar;
 typedef struct NativeFunctionObject NativeFunctionObject;
+struct FunctionObject FunctionObject;
 
 RuntimeValue    VM_Eval(VM* vm, CodeObject* co, Global* global);
 RuntimeValue    VM_Stack_Peek(VM* vm, size_t offset);
@@ -70,10 +71,11 @@ struct NativeFunctionObject
     size_t arity;
 };
 
-struct CodeObject 
+struct CodeObject
 {
     Object object;
     char* name;
+    size_t arity;
     size_t name_length;
     uint8_t* code; // Array of opcodes
     size_t code_last;
@@ -84,6 +86,11 @@ struct CodeObject
     LocalVar* locals;
     uint64 locals_size;
     uint64 locals_max;
+};
+
+struct FunctionObject
+{
+    CodeObject code;
 };
 
 struct GlobalVar 
@@ -257,7 +264,7 @@ RuntimeValue Alloc_Code(char* name, size_t name_length){
     co->name_length = name_length;
     co->code_last = 0;
     co->constants_last = 0;
-    co->scope_level = -1;
+    co->scope_level = 0;
 
     co->locals = malloc(sizeof(LocalVar) * 10); // TODO: DANGER! Handle memory when adding
     co->locals_size = 0;
@@ -422,7 +429,7 @@ void Local_Define(CodeObject* co, BufferString* name){
 #define OP_CMP_LE           0x05
 #define OP_CMP_NE           0x06
 
-#define STACK_LIMIT 1000000000 // DANGER! TODO: Reduce this when scopes are implemented.
+#define STACK_LIMIT 512 // DANGER! TODO: Reduce this when scopes are implemented.
 
 RuntimeValue VM_exec(VM* vm, Global* global, CodeObject* codeObject){
     vm->global = global;

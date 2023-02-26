@@ -159,6 +159,11 @@ void Gen(CodeObject* co, Statement* statement, Global* global){
             break;
         }
 
+        case AST_FunctionDeclaration: {
+            // TODO: IMPLEMENT
+            break;
+        }
+
         case AST_BlockStatement:{
             BlockStatement blockStatement = *(BlockStatement*)statement;
 
@@ -168,14 +173,15 @@ void Gen(CodeObject* co, Statement* statement, Global* global){
             SSNode* current_node = blockStatement.body->first;
             while (current_node != NULL)
             {
+                Statement* test = ((Statement*)current_node->value);
+
                 Gen(co, current_node->value, global);
 
                 // Pop if not last last (last is return value)
-                bool is_global_declaration = 
-                    ((Statement*)current_node->value)->type == AST_VariableDeclaration && co->scope_level == 0;
+                bool is_local_declaration = 
+                    ((Statement*)current_node->value)->type == AST_VariableDeclaration && co->scope_level > 0;
 
-
-                if(current_node->next != NULL && is_global_declaration){
+                if(!is_local_declaration){ // current_node->next != NULL && 
                     Emit(co, OP_POP);
                 }
 
@@ -183,7 +189,7 @@ void Gen(CodeObject* co, Statement* statement, Global* global){
             }
 
             // Scope exit
-            if(co->scope_level != 0){
+            if(co->scope_level > 0){
                 uint64 vars_to_pop = 0;
                 while (co->locals_size > 0 && co->locals[co->locals_size - 1].scope_level == co->scope_level)
                 {
@@ -191,6 +197,7 @@ void Gen(CodeObject* co, Statement* statement, Global* global){
                     co->locals_size--;
                 }
                 
+             
                 Emit(co, OP_SCOPE_EXIT);
                 Emit64(co, vars_to_pop);
                 co->scope_level--;
@@ -270,7 +277,7 @@ void Gen(CodeObject* co, Statement* statement, Global* global){
                 Emit64(co, 0);
             }
 
-            if(co->scope_level == 0) // If global scope
+            if(co->scope_level == 1) // If global scope
             { 
                 Global_Define(global, &variableDeclaration.name); // This should return index directly
                 int64 index = Global_GetIndexBufferString(global, &variableDeclaration.name);

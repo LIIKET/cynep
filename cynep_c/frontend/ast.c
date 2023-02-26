@@ -17,6 +17,7 @@ typedef struct BinaryExpression ComparisonExpression;
 typedef struct Expression Expression;
 typedef struct IfStatement IfStatement;
 typedef struct WhileStatement WhileStatement;
+typedef struct FunctionDeclaration FunctionDeclaration;
 
 enum NodeType 
 {
@@ -27,6 +28,7 @@ enum NodeType
     AST_VariableDeclaration,
     AST_TypeDefinition,
     AST_PropertyDeclaration,
+    AST_FunctionDeclaration,
 
     // Expression
     AST_AssignmentExpression,
@@ -57,6 +59,12 @@ struct WhileStatement
 {
     ComparisonExpression* test;
     Statement* body;
+};
+
+struct FunctionDeclaration{
+    BufferString name;
+    SSList* args; // List of identifiers, TODO: Replace with arg struct containing type info?
+    BlockStatement* body;
 };
 
 struct Identifier 
@@ -135,6 +143,7 @@ struct Statement
         BinaryExpression binary_expression;
         BinaryExpression comparison_expression;
         WhileStatement while_statement;
+        FunctionDeclaration function_declaration;
     }; 
     NodeType type;
 };
@@ -147,12 +156,22 @@ struct Expression {
 // Initializers
 //
 
-BlockStatement* Create_BlockStatement(Statement* node, SSList* body)
+BlockStatement* Create_BlockStatement(Statement* memory, SSList* body)
 {
-    node->type = AST_BlockStatement;
-    node->block_statement.body = SSList_Create(body);
+    memory->type = AST_BlockStatement;
+    memory->block_statement.body = SSList_Create(body);
 
-    return (BlockStatement*)node;
+    return (BlockStatement*)memory;
+}
+
+FunctionDeclaration* Create_FunctionDeclaration(Statement* memory, BufferString name, SSList* args, BlockStatement* block)
+{
+    memory->type = AST_FunctionDeclaration;
+    memory->function_declaration.args = args;
+    memory->function_declaration.body = block;
+    memory->function_declaration.name = name;
+
+    return (FunctionDeclaration*)memory;
 }
 
 VariableDeclaration* Create_VariableDeclaration(Statement* memory, BufferString name, Expression* value)
@@ -348,8 +367,24 @@ SSList* Get_Children(Statement* expression)
                 }
             }
 
-            
+            break;
+        }
+        case AST_FunctionDeclaration:
+        {
+            FunctionDeclaration* node = (FunctionDeclaration*)expression;
 
+            if(node->args->first != NULL){
+                SSNode* cursor = node->args->first;
+                while(cursor != NULL){
+                    SSNode* arg_node = SSNode_Create(malloc(sizeof(SSNode)), cursor->value);
+                    SSList_Append(list, arg_node);
+                    cursor = cursor->next;
+                }
+            }
+
+            SSNode* left_node = SSNode_Create(malloc(sizeof(SSNode)), node->body);
+            SSList_Append(list, left_node);
+            
             break;
         }
         case AST_BinaryExpression:
@@ -364,6 +399,7 @@ SSList* Get_Children(Statement* expression)
 
             break;
         }
+        
         case AST_ComparisonExpression:
         {
             BinaryExpression* node = (BinaryExpression*)expression;
@@ -389,6 +425,19 @@ SSList* Get_Children(Statement* expression)
                 SSNode* right_node = SSNode_Create(malloc(sizeof(SSNode)), node->alternate);
                 SSList_Append(list, right_node);
             }
+            
+            break;
+        }
+        case AST_WhileStatement:{
+            WhileStatement* node = (WhileStatement*)expression;
+
+            SSNode* test_node = SSNode_Create(malloc(sizeof(SSNode)), node->test);
+            SSList_Append(list, test_node);
+
+            SSNode* left_node = SSNode_Create(malloc(sizeof(SSNode)), node->body);
+            SSList_Append(list, left_node);
+
+
             
             break;
         }
@@ -481,6 +530,12 @@ void Print_Node(Statement* node)
         case AST_WhileStatement:
         {
             printf("WhileStatement");   
+            break;    
+        }
+        case AST_FunctionDeclaration:
+        {
+            FunctionDeclaration* item = (FunctionDeclaration*)node;
+            printf("FunctionDeclaration: %.*s", item->name.length, item->name.start);
             break;    
         }
         case AST_NumericLiteral:

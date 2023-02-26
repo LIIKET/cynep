@@ -24,6 +24,7 @@ CallExpression* Parse_CallExpression(MemPool* pool, Expression* caller);
 Expression* Parse_MemberExpression(MemPool* pool);
 SSList* Parse_Args(MemPool* pool);
 SSList* Parse_ArgumentsList(MemPool* pool, SSList* args);
+FunctionDeclaration* Parse_FunctionDeclaration(MemPool* pool);
 
 //
 // Globals
@@ -114,6 +115,9 @@ Statement* Parse_Statement(MemPool* pool)
         case Token_Type: {
             return (Statement*)Parse_TypeDeclaration(pool);
         }
+        case Token_Func: {
+            return (Statement*)Parse_FunctionDeclaration(pool);
+        }
         case Token_If: {
             return (Statement*)Parse_IfStatement(pool);
         }
@@ -124,6 +128,43 @@ Statement* Parse_Statement(MemPool* pool)
             return (Statement*)Parse_Expression(pool);
         }
     }
+}
+
+FunctionDeclaration* Parse_FunctionDeclaration(MemPool* pool)
+{
+    Token func_token = Consume();
+    Token func_name = ConsumeExpect(Token_Identifier, "Function should be followed by an identifier");
+
+    MemPool_Record list_mem = MemPool_GetMem(pool, sizeof(SSList));
+    SSList* args = SSList_Create(list_mem.pointer);
+
+    ConsumeExpect(Token_OpenParen, "Function declaration should be followed by an open parenthesis.");
+
+    if(Current().type == Token_Identifier){
+        do {
+            if(Current().type == Token_Comma){
+                Consume();
+            }
+
+            MemPool_Record list_node_mem = MemPool_GetMem(pool, sizeof(SSNode));
+            MemPool_Record identifier_mem = MemPool_GetMem(pool, sizeof(Statement));
+
+            Token identifierTok = ConsumeExpect(Token_Identifier, "func argument should be an identifier.");
+            Identifier* identifier = Create_Identifier(identifier_mem.pointer, identifierTok.string_value);
+            SSNode* node = SSNode_Create(list_node_mem.pointer, identifier);
+            SSList_Append(args, node);
+        } while((Current().type == Token_Comma));
+    }
+
+    ConsumeExpect(Token_CloseParen, "Missing close parenthesis in function declaration.");
+    
+    BlockStatement* body;
+    if(Current().type == Token_OpenBrace){
+        body = Parse_BlockStatement(pool);
+    }
+
+    MemPool_Record statement_mem = MemPool_GetMem(pool, sizeof(Statement));
+    return Create_FunctionDeclaration(statement_mem.pointer, func_name.string_value, args, body);
 }
 
 IfStatement* Parse_IfStatement(MemPool* pool)

@@ -35,6 +35,8 @@ RuntimeValue Multiply(size_t argc, RuntimeValue* argv){
     RuntimeValue arg1 = argv[0];
     RuntimeValue arg2 = argv[1];
 
+    // printf("NATIVE CALL: %f\n", arg2.number);
+
     float64 result = arg1.number * arg2.number;
 
     return NUMBER(result);

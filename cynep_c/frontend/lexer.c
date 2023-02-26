@@ -18,6 +18,7 @@ enum TokenType
     Token_If,
     Token_Else,
     Token_While,
+    Token_Func,
 
     // Operators
     Token_ComparisonOperator,
@@ -288,6 +289,10 @@ Token* lexer_tokenize(SourceFile* file)
                     else if(length == 5 && strncmp(current, "while", length) == 0)
                     {
                         *NextTokenMem(pool) = Token_Create(Token_While, current, length); 
+                    }
+                    else if(length == 4 && strncmp(current, "func", length) == 0)
+                    {
+                        *NextTokenMem(pool) = Token_Create(Token_Func, current, length); 
                     }
                     else
                     {

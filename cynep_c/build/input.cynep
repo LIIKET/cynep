@@ -1,10 +1,22 @@
-if(true){
-    var i = 3;
-
-    multiply(i,3)
-
-    if(true){
-        var apa = 123;
-    }
+func add(valone, valtwo){
+    var i = 123;
 }
 
+var i = 0;
+var result = 2;
+
+while(i < 500000){
+    var a = "Hello" + " Sailor!";
+    i = i + 1;
+    multiply(2, 2)
+}
+
+var asd = 0;
+asd = asd + 15;
+multiply(asd, 2)
+
+if(asd == 15){
+    var oje = 654;
+    asd = 8;
+    multiply(oje, 2)
+}
