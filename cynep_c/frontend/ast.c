@@ -141,16 +141,14 @@ struct Expression {
 // Initializers
 //
 
-BlockStatement* Create_BlockStatement(AstNode* node, List* body)
-{
+BlockStatement* Create_BlockStatement(AstNode* node, List* body) {
     node->type = AST_BlockStatement;
     node->block_statement.body = list_create(body);
 
     return (BlockStatement*)node;
 }
 
-FunctionDeclaration* Create_FunctionDeclaration(AstNode* memory, BufferString name, List* args, BlockStatement* block)
-{
+FunctionDeclaration* Create_FunctionDeclaration(AstNode* memory, BufferString name, List* args, BlockStatement* block) {
     memory->type = AST_FunctionDeclaration;
     memory->function_declaration.args = args;
     memory->function_declaration.body = block;
@@ -159,8 +157,7 @@ FunctionDeclaration* Create_FunctionDeclaration(AstNode* memory, BufferString na
     return (FunctionDeclaration*)memory;
 }
 
-VariableDeclaration* Create_VariableDeclaration(AstNode* memory, BufferString name, Expression* value)
-{
+VariableDeclaration* Create_VariableDeclaration(AstNode* memory, BufferString name, Expression* value) {
     memory->type = AST_VariableDeclaration;
     memory->variable_declaration.value = value;
 
@@ -170,8 +167,7 @@ VariableDeclaration* Create_VariableDeclaration(AstNode* memory, BufferString na
     return (VariableDeclaration*)memory;
 }
 
-TypeDeclaration* Create_TypeDeclaration(AstNode* memory, List* member_list_memory, BufferString name)
-{
+TypeDeclaration* Create_TypeDeclaration(AstNode* memory, List* member_list_memory, BufferString name) {
     memory->type = AST_TypeDefinition;
     memory->type_declaration.properties = list_create(member_list_memory);
 
@@ -181,8 +177,7 @@ TypeDeclaration* Create_TypeDeclaration(AstNode* memory, List* member_list_memor
     return (TypeDeclaration*)memory;
 }
 
-PropertyDeclaration* Create_PropertyDeclaration(AstNode* memory, BufferString name)
-{
+PropertyDeclaration* Create_PropertyDeclaration(AstNode* memory, BufferString name) {
     memory->type = AST_PropertyDeclaration;
 
     memory->property_declaration.name.start = name.start;
@@ -191,8 +186,7 @@ PropertyDeclaration* Create_PropertyDeclaration(AstNode* memory, BufferString na
     return (PropertyDeclaration*)memory;
 }
 
-CallExpression* Create_CallExpression(AstNode* memory, Expression* callee, List* args)
-{
+CallExpression* Create_CallExpression(AstNode* memory, Expression* callee, List* args) {
     memory->type = AST_CallExpression;
     memory->call_expression.callee = callee;
     memory->call_expression.args = args;
@@ -200,8 +194,7 @@ CallExpression* Create_CallExpression(AstNode* memory, Expression* callee, List*
     return (CallExpression*)memory;
 }
 
-MemberExpression* Create_MemberExpression(AstNode* memory, Expression* object, Identifier* member)
-{
+MemberExpression* Create_MemberExpression(AstNode* memory, Expression* object, Identifier* member) {
     memory->type = AST_MemberExpression;
     memory->member_expression.object = object;
     memory->member_expression.member = member;
@@ -209,8 +202,7 @@ MemberExpression* Create_MemberExpression(AstNode* memory, Expression* object, I
     return (MemberExpression*)memory;
 }
 
-AssignmentExpression* Create_AssignmentExpression(AstNode* memory, Expression* assignee, Expression* value)
-{
+AssignmentExpression* Create_AssignmentExpression(AstNode* memory, Expression* assignee, Expression* value) {
     memory->type = AST_AssignmentExpression;
     memory->assignment_expression.assignee = assignee;
     memory->assignment_expression.value = value;
@@ -218,8 +210,7 @@ AssignmentExpression* Create_AssignmentExpression(AstNode* memory, Expression* a
     return (AssignmentExpression*)memory;
 }
 
-BinaryExpression* Create_BinaryExpression(AstNode* memory, Expression* left, char* operatr, Expression* right)
-{
+BinaryExpression* Create_BinaryExpression(AstNode* memory, Expression* left, char* operatr, Expression* right) {
     memory->type = AST_BinaryExpression;
     memory->binary_expression.left = left;
     memory->binary_expression.right = right;
@@ -229,8 +220,7 @@ BinaryExpression* Create_BinaryExpression(AstNode* memory, Expression* left, cha
     return (BinaryExpression*)memory;
 }
 
-ComparisonExpression* Create_ComparisonExpression(AstNode* memory, Expression* left, char* operatr, Expression* right)
-{
+ComparisonExpression* Create_ComparisonExpression(AstNode* memory, Expression* left, char* operatr, Expression* right) {
     memory->type = AST_ComparisonExpression;
     memory->comparison_expression.left = left;
     memory->comparison_expression.right = right;
@@ -240,8 +230,7 @@ ComparisonExpression* Create_ComparisonExpression(AstNode* memory, Expression* l
     return (ComparisonExpression*)memory;
 }
 
-IfStatement* Create_IfStatement(AstNode* memory, ComparisonExpression* test, AstNode* consequent, AstNode* alternate)
-{
+IfStatement* Create_IfStatement(AstNode* memory, ComparisonExpression* test, AstNode* consequent, AstNode* alternate) {
     memory->type = AST_IfStatement;
     memory->ifStatement.test = test;
     memory->ifStatement.consequent = consequent;
@@ -250,8 +239,7 @@ IfStatement* Create_IfStatement(AstNode* memory, ComparisonExpression* test, Ast
     return (IfStatement*)memory;
 }
 
-WhileStatement* Create_WhileStatement(AstNode* memory, ComparisonExpression* test, AstNode* body)
-{
+WhileStatement* Create_WhileStatement(AstNode* memory, ComparisonExpression* test, AstNode* body) {
     memory->type = AST_WhileStatement;
     memory->while_statement.test = test;
     memory->while_statement.body = body;
@@ -259,8 +247,7 @@ WhileStatement* Create_WhileStatement(AstNode* memory, ComparisonExpression* tes
     return (WhileStatement*)memory;
 }
 
-Identifier* Create_Identifier(AstNode* memory, BufferString name)
-{
+Identifier* Create_Identifier(AstNode* memory, BufferString name) {
     memory->type = AST_Identifier;
     memory->identifier.name.start = name.start;
     memory->identifier.name.length = name.length;
@@ -268,16 +255,14 @@ Identifier* Create_Identifier(AstNode* memory, BufferString name)
     return (Identifier*)memory;
 }
 
-NumericLiteral* Create_NumericLiteral(AstNode* memory, int64 value)
-{
+NumericLiteral* Create_NumericLiteral(AstNode* memory, int64 value) {
     memory->type = AST_NumericLiteral;
     memory->numeric_literal.value = value;
 
     return (NumericLiteral*)memory;
 }
 
-StringLiteral* Create_StringLiteral(AstNode* memory, BufferString value)
-{
+StringLiteral* Create_StringLiteral(AstNode* memory, BufferString value) {
     memory->type = AST_StringLiteral;
     memory->string_literal.value = value;
 
@@ -287,15 +272,13 @@ StringLiteral* Create_StringLiteral(AstNode* memory, BufferString value)
 //
 // Visualizing
 //
-List* Get_Children(AstNode* expression)
-{
+List* Get_Children(AstNode* expression) {
     List* list = malloc(sizeof(List));
     list->first = NULL;
     list->last = NULL;
 
-    switch (expression->type)
-    {
-        case AST_BlockStatement:
+    switch (expression->type) {
+        case AST_BlockStatement: 
         {
             AstNode* node = expression;
             return node->block_statement.body;
