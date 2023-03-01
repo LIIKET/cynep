@@ -1,7 +1,5 @@
 #pragma once
 
-#include <time.h>
-
 int64 timestamp() {
     struct timeval tv;
     mingw_gettimeofday(&tv,NULL);

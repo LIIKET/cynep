@@ -200,7 +200,7 @@ void Gen(CodeObject* co, AstNode* statement, Global* global){
             Local_Define(new_co, &name);
             
 
-            SSNode* current_node = functionDeclaration.args->first;
+            ListNode* current_node = functionDeclaration.args->first;
             while (current_node != NULL)
             {
                 Identifier* identifier = ((Identifier*)current_node->value);
@@ -254,7 +254,7 @@ void Gen(CodeObject* co, AstNode* statement, Global* global){
             // Scope begin
             co->scope_level++;
 
-            SSNode* current_node = blockStatement.body->first;
+            ListNode* current_node = blockStatement.body->first;
             while (current_node != NULL)
             {
                 AstNode* test = ((AstNode*)current_node->value);
@@ -434,7 +434,7 @@ void Gen(CodeObject* co, AstNode* statement, Global* global){
 
             //RuntimeValue asd = co->code[co->code_last - 1];
 
-            SSNode* cursor = callExpression.args->first;
+            ListNode* cursor = callExpression.args->first;
 
             while (cursor != NULL)
             {

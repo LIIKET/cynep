@@ -36,14 +36,12 @@ enum TokenType
     Token_EOF
 };
 
-struct BufferString 
-{
+struct BufferString {
     char* start;
     size_t length;
 };
 
-struct Token 
-{
+struct Token {
     TokenType type;
     union
     {
@@ -53,8 +51,7 @@ struct Token
     };
 };
 
-Token Token_Create(TokenType type, char* start, size_t length) 
-{
+Token Token_Create(TokenType type, char* start, size_t length) {
     Token token;
     token.type = type;
     token.string_value.length = length;
@@ -63,8 +60,7 @@ Token Token_Create(TokenType type, char* start, size_t length)
     return token;
 }
 
-Token Token_Number_Create(TokenType type, float64 value) 
-{
+Token Token_Number_Create(TokenType type, float64 value) {
     Token token;
     token.type = type;
     token.number_value = value;
@@ -72,8 +68,7 @@ Token Token_Number_Create(TokenType type, float64 value)
     return token;
 }
 
-Token Token_Operator_Create(TokenType type, char operator[2]) 
-{
+Token Token_Operator_Create(TokenType type, char operator[2]) {
     Token token;
     token.type = type;
     token.string_value.length = 0;
@@ -83,17 +78,15 @@ Token Token_Operator_Create(TokenType type, char operator[2])
     return token;
 }
 
-bool Is_Skippable(char c) 
-{
+bool Is_Skippable(char c) {
     return c == -85 || c == '\n' || c == '\t' || c == '\r' || isspace(c);
 }
 
-Token* NextTokenMem(MemPool* pool){
+Token* NextTokenMem(MemPool* pool) {
     return MemPool_GetMem(pool, sizeof(Token)).pointer;
 }
 
-Token* lexer_tokenize(SourceFile* file)
-{
+Token* lexer_tokenize(TextFile* file) {
     char* file_buffer = file->buffer;
     int64 t1 = timestamp();
 
@@ -105,8 +98,7 @@ Token* lexer_tokenize(SourceFile* file)
     size_t iterator = 0;
 
 
-    while(file_buffer[iterator] != NULL_CHAR)
-    {
+    while(file_buffer[iterator] != NULL_CHAR) {
         char* current = &file_buffer[iterator];
         char* lookahead = &file_buffer[iterator + 1];
 
@@ -125,48 +117,15 @@ Token* lexer_tokenize(SourceFile* file)
             case '-':
             case '*':
             case '/':
-            case '%':
-            {
-                *NextTokenMem(pool) = Token_Operator_Create(Token_BinaryOperator, current_as_string);  
-                break;
-            }    
-            case '(':
-            {
-                *NextTokenMem(pool) = Token_Operator_Create(Token_OpenParen, current_as_string);  
-                break;
-            }
-            case ')':
-            {
-                *NextTokenMem(pool) = Token_Operator_Create(Token_CloseParen, current_as_string);  
-                break;
-            }   
-            case '{':
-            {
-                *NextTokenMem(pool) = Token_Operator_Create(Token_OpenBrace, current_as_string);  
-                break;
-            }
-            case '}':
-            {
-                *NextTokenMem(pool) = Token_Operator_Create(Token_CloseBrace, current_as_string);  
-                break;
-            }
-            case ',':
-            {
-                *NextTokenMem(pool) = Token_Operator_Create(Token_Comma, current_as_string);  
-                break;
-            }
-            case ';':
-            {
-                *NextTokenMem(pool) = Token_Operator_Create(Token_Semicolon, current_as_string);  
-                break;
-            }
-            case '.':
-            {
-                *NextTokenMem(pool) = Token_Operator_Create(Token_Dot, current_as_string);  
-                break;
-            }
-            case '!':
-            {   
+            case '%': { *NextTokenMem(pool) = Token_Operator_Create(Token_BinaryOperator, current_as_string); break; }    
+            case '(': { *NextTokenMem(pool) = Token_Operator_Create(Token_OpenParen, current_as_string); break; }
+            case ')': { *NextTokenMem(pool) = Token_Operator_Create(Token_CloseParen, current_as_string); break; }   
+            case '{': { *NextTokenMem(pool) = Token_Operator_Create(Token_OpenBrace, current_as_string); break; }
+            case '}': { *NextTokenMem(pool) = Token_Operator_Create(Token_CloseBrace, current_as_string); break; }
+            case ',': { *NextTokenMem(pool) = Token_Operator_Create(Token_Comma, current_as_string); break; }
+            case ';': { *NextTokenMem(pool) = Token_Operator_Create(Token_Semicolon, current_as_string); break; }
+            case '.': { *NextTokenMem(pool) = Token_Operator_Create(Token_Dot, current_as_string); break; }
+            case '!': {   
                 if(*lookahead == '=')
                 {
                     *NextTokenMem(pool) = Token_Operator_Create(Token_ComparisonOperator, current_and_lookahead_as_string);  
@@ -178,46 +137,40 @@ Token* lexer_tokenize(SourceFile* file)
                 
                 break;
             }
-            case '>':
-            {   
-                if(*lookahead == '=')
-                {
+            case '>': {   
+                if(*lookahead == '=') {
                     *NextTokenMem(pool) = Token_Operator_Create(Token_ComparisonOperator, current_and_lookahead_as_string);                  
                     iterator++;
                 }
-                else{
+                else {
                     *NextTokenMem(pool) = Token_Operator_Create(Token_ComparisonOperator, current_as_string); 
                 }
                 
                 break;
             }
-            case '<': 
-            {   
-                if(*lookahead == '=')
-                {
+            case '<': {   
+                if(*lookahead == '=') {
                     *NextTokenMem(pool) = Token_Operator_Create(Token_ComparisonOperator, current_and_lookahead_as_string);  
                     iterator++;
                 }
-                else{
+                else {
                     *NextTokenMem(pool) = Token_Operator_Create(Token_ComparisonOperator, current_as_string); 
                 }
                 
                 break;
             }
-            case '=':
-            {   
-                if(*lookahead == '=')
-                {
+            case '=': {   
+                if(*lookahead == '=') {
                     *NextTokenMem(pool) = Token_Operator_Create(Token_ComparisonOperator, current_and_lookahead_as_string);  
                     iterator++;
                 }
-                else{
+                else {
                     *NextTokenMem(pool) = Token_Operator_Create(Token_Assignment, current_as_string); 
                 }
                 
                 break;
             }
-            case '"':{             
+            case '"': {             
                 // String literals
 
                 char* start = current + 1;
@@ -233,10 +186,8 @@ Token* lexer_tokenize(SourceFile* file)
 
                 break;
             }
-            default: 
-            {
-                if (isdigit(*current))
-                {
+            default: {
+                if (isdigit(*current)) {
                     // Numbers
 
                     char number[50] = "";
@@ -257,8 +208,7 @@ Token* lexer_tokenize(SourceFile* file)
 
                     *NextTokenMem(pool) = Token_Number_Create(Token_Number, parsed_number); 
                 }
-                else if (isalpha(*current))
-                {
+                else if (isalpha(*current)) {
                     // Reserved keywords and identifiers
 
                     size_t start_pos = iterator;
@@ -270,41 +220,32 @@ Token* lexer_tokenize(SourceFile* file)
                     // Reduce by one cause we also increment at the end of loop
                     iterator += length - 1; 
 
-                    if(length == 4 && strncmp(current, "type", length) == 0)
-                    {
+                    if(length == 4 && strncmp(current, "type", length) == 0) {
                         *NextTokenMem(pool) = Token_Create(Token_Type, current, length); 
                     }
-                    else if(length == 3 && strncmp(current, "var", length) == 0)
-                    {
+                    else if(length == 3 && strncmp(current, "var", length) == 0) {
                         *NextTokenMem(pool) = Token_Create(Token_Let, current, length); 
                     }
-                    else if(length == 2 && strncmp(current, "if", length) == 0)
-                    {
+                    else if(length == 2 && strncmp(current, "if", length) == 0) {
                         *NextTokenMem(pool) = Token_Create(Token_If, current, length); 
                     }
-                    else if(length == 4 && strncmp(current, "else", length) == 0)
-                    {
+                    else if(length == 4 && strncmp(current, "else", length) == 0) {
                         *NextTokenMem(pool) = Token_Create(Token_Else, current, length); 
                     }
-                    else if(length == 5 && strncmp(current, "while", length) == 0)
-                    {
+                    else if(length == 5 && strncmp(current, "while", length) == 0) {
                         *NextTokenMem(pool) = Token_Create(Token_While, current, length); 
                     }
-                    else if(length == 4 && strncmp(current, "func", length) == 0)
-                    {
+                    else if(length == 4 && strncmp(current, "func", length) == 0) {
                         *NextTokenMem(pool) = Token_Create(Token_Func, current, length); 
                     }
-                    else
-                    {
+                    else {
                         *NextTokenMem(pool) = Token_Create(Token_Identifier, current, length); 
                     }
                 }
-                else if (Is_Skippable(*current))
-                {
+                else if (Is_Skippable(*current)) {
                     break;
                 }
-                else
-                {   
+                else {   
                     printf("Lexer error. Unrecognized character in source: \"%c\".\n", *current);
                     exit(0);
                 }

@@ -1,24 +1,21 @@
 #pragma once
 
-typedef struct SSNode SSNode;
-typedef struct SSList SSList;
+typedef struct ListNode ListNode;
+typedef struct List List;
 
-struct SSNode 
-{
+struct ListNode {
     void* value;
-    SSNode* next;
-    SSNode* prev;
+    ListNode* next;
+    ListNode* prev;
 };
 
-struct SSList 
-{
-    SSNode* first;
-    SSNode* last;
+struct List {
+    ListNode* first;
+    ListNode* last;
     size_t count;
 };
 
-void SSList_Append(SSList* list, SSNode* node)
-{
+void list_append(List* list, ListNode* node) {
     if(list->first == NULL){
         list->first = node;
     }
@@ -32,8 +29,7 @@ void SSList_Append(SSList* list, SSNode* node)
     list->count++;
 }
 
-SSList* SSList_Create(SSList* list)
-{
+List* list_create(List* list) {
     list->first = NULL;
     list->last = NULL;
     list->count = 0;
@@ -41,27 +37,10 @@ SSList* SSList_Create(SSList* list)
     return list;
 }
 
-SSNode* SSNode_Create(SSNode* node, void* value)
-{
+ListNode* listNode_create(ListNode* node, void* value) {
     node->next = NULL;
     node->prev = NULL;
     node->value = value;
 
     return node;
-}
-
-void SSList_Free(SSList* list)
-{
-    // SSNode* headNode = list->first;
-    // SSNode* currentNode;
-
-    // Cannot free cause they are allocated in chunks
-    // TODO: Set freeable property on ones created only for display purposes and free them
-    // while (headNode != NULL){
-    //     currentNode = headNode;
-    //     headNode = headNode->next;
-    //     free(currentNode);
-    // }
-
-    // free(list);
 }

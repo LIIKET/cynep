@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <ctype.h>
+#include <time.h>
 
 #include "util/defines.c"
 #include "util/diagnostics.c"
@@ -52,7 +53,7 @@ int main(int argc, char**argv)
 
     size_t asd = sizeof(AstNode);
 
-    SourceFile* file = File_Read_Text("input.cynep");
+    TextFile* file = read_entire_file("input.cynep");
     Token* tokens = lexer_tokenize(file);
     AstNode* program = Build_SyntaxTree(tokens);
 
@@ -70,7 +71,7 @@ int main(int argc, char**argv)
     printf("Total: %d ms\n", total_end/1000-total_begin/1000);
 
     if (show_ast) 
-        Prinst_AST((AstNode*)program);
+        ast_print_begin((AstNode*)program);
     
     if (show_disassemble) 
         Disassemble(global);
@@ -86,7 +87,7 @@ int main(int argc, char**argv)
 
 void *parseTask(void *vargp)
 {
-    SourceFile* file = File_Read_Text((char*)vargp);
+    TextFile* file = read_entire_file((char*)vargp);
     Token* tokens = lexer_tokenize(file);
 }
 

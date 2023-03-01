@@ -1,72 +1,42 @@
 #pragma once
 
-typedef struct SourceFile SourceFile;
+typedef struct TextFile TextFile;
 
-struct SourceFile
-{
+struct TextFile {
     size_t length;
     char* buffer;
     char* path;
 };
 
-SourceFile* File_Read_Text(char* filename)
-{
+TextFile* read_entire_file(char* filename) {
     int64 t1 = timestamp();
 
-    size_t result_bytes = 0;
-    size_t chunk_bytes = 1000000; // 50000000 = 50 Megabytes
+    FILE *stream;
+    char *contents;
+    size_t fileSize = 0;
 
-    char* buffer = (char*)malloc(chunk_bytes);
-    char* result = NULL;
+    // Note "b" to avoid DOS/UNIX new line conversion.
+    stream = fopen(filename, "rb");
 
-    FILE *file = NULL;
-    size_t read_bytes = 0;
+    // Determine the file size
+    fseek(stream, 0L, SEEK_END);
+    fileSize = ftell(stream);
+    fseek(stream, 0L, SEEK_SET);
 
-    file = fopen(filename, "r");
+    contents = malloc(fileSize + 1);
 
-    if (file == NULL){
-        // TODO: Handle failed to open file
-    }
+    size_t size=fread(contents, 1, fileSize, stream);
+    contents[size] = 0;
 
-    while ((read_bytes = fread(buffer, 1, chunk_bytes, file)) > 0){
-        result = (char*)realloc(result, result_bytes + read_bytes);
-        memcpy(result + result_bytes, buffer, read_bytes);
-        result_bytes = result_bytes + read_bytes;
+    fclose(stream);
 
-        if (ferror(file)) {
-            // TODO: Deal with potential errors?
-        }
-    }
-
-    // Null terminate
-    result = (char*)realloc(result, result_bytes + sizeof(char));
-    result[result_bytes / sizeof(char)] = NULL_CHAR;
-
-    fclose(file);
-    free(buffer);
-
-    SourceFile* return_file = malloc(sizeof(SourceFile));
-    return_file->buffer = result;
+    TextFile* return_file = malloc(sizeof(TextFile));
+    return_file->buffer = contents;
     return_file->path = filename;
-    return_file->length = result_bytes / sizeof(char);
-
-    // size_t result_length = result_bytes / sizeof(char);
-
-    //size_t test = getSize(result);
-    // for (size_t i = 0; i < result_length; i++)
-    // {
-    //     if(result[i]== EOF) {
-    //         break;
-    //     }
-
-    //     printf("%c", result[i]);
-    // }
-    
+    return_file->length = size;
+ 
     int64 t2 = timestamp();
-
     printf("File read: %d ms\n", t2/1000-t1/1000);
 
     return return_file;
 }
-
-

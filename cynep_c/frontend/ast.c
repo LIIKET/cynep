@@ -45,7 +45,7 @@ enum NodeType
 
 struct BlockStatement 
 {
-    SSList* body; // Statements
+    List* body; // Statements
 };
 
 struct IfStatement
@@ -63,7 +63,7 @@ struct WhileStatement
 
 struct FunctionDeclaration{
     BufferString name;
-    SSList* args; // List of identifiers, TODO: Replace with arg struct containing type info?
+    List* args; // List of identifiers, TODO: Replace with arg struct containing type info?
     BlockStatement* body;
 };
 
@@ -96,14 +96,14 @@ struct PropertyDeclaration
 struct TypeDeclaration
 {
     BufferString name;
-    SSList* properties; // PropertyDeclarations
+    List* properties; // PropertyDeclarations
     // int64 properties_count;
 };
 
 struct CallExpression 
 {
     Expression* callee;
-    SSList* args;
+    List* args;
 };
 
 struct MemberExpression 
@@ -156,15 +156,15 @@ struct Expression {
 // Initializers
 //
 
-BlockStatement* Create_BlockStatement(AstNode* node, SSList* body)
+BlockStatement* Create_BlockStatement(AstNode* node, List* body)
 {
     node->type = AST_BlockStatement;
-    node->block_statement.body = SSList_Create(body);
+    node->block_statement.body = list_create(body);
 
     return (BlockStatement*)node;
 }
 
-FunctionDeclaration* Create_FunctionDeclaration(AstNode* memory, BufferString name, SSList* args, BlockStatement* block)
+FunctionDeclaration* Create_FunctionDeclaration(AstNode* memory, BufferString name, List* args, BlockStatement* block)
 {
     memory->type = AST_FunctionDeclaration;
     memory->function_declaration.args = args;
@@ -185,10 +185,10 @@ VariableDeclaration* Create_VariableDeclaration(AstNode* memory, BufferString na
     return (VariableDeclaration*)memory;
 }
 
-TypeDeclaration* Create_TypeDeclaration(AstNode* memory, SSList* member_list_memory, BufferString name)
+TypeDeclaration* Create_TypeDeclaration(AstNode* memory, List* member_list_memory, BufferString name)
 {
     memory->type = AST_TypeDefinition;
-    memory->type_declaration.properties = SSList_Create(member_list_memory);
+    memory->type_declaration.properties = list_create(member_list_memory);
 
     memory->type_declaration.name.start = name.start;
     memory->type_declaration.name.length = name.length;
@@ -206,7 +206,7 @@ PropertyDeclaration* Create_PropertyDeclaration(AstNode* memory, BufferString na
     return (PropertyDeclaration*)memory;
 }
 
-CallExpression* Create_CallExpression(AstNode* memory, Expression* callee, SSList* args)
+CallExpression* Create_CallExpression(AstNode* memory, Expression* callee, List* args)
 {
     memory->type = AST_CallExpression;
     memory->call_expression.callee = callee;
@@ -302,9 +302,9 @@ StringLiteral* Create_StringLiteral(AstNode* memory, BufferString value)
 //
 // Visualizing
 //
-SSList* Get_Children(AstNode* expression)
+List* Get_Children(AstNode* expression)
 {
-    SSList* list = malloc(sizeof(SSList));
+    List* list = malloc(sizeof(List));
     list->first = NULL;
     list->last = NULL;
 
@@ -322,8 +322,8 @@ SSList* Get_Children(AstNode* expression)
             VariableDeclaration* node = (VariableDeclaration*)expression;
             
             if(node->value != NULL){
-                SSNode* newNode = SSNode_Create(malloc(sizeof(SSNode)), node->value);
-                SSList_Append(list, newNode);
+                ListNode* newNode = listNode_create(malloc(sizeof(ListNode)), node->value);
+                list_append(list, newNode);
             }
 
             break;
@@ -343,11 +343,11 @@ SSList* Get_Children(AstNode* expression)
         {
             AssignmentExpression* node = (AssignmentExpression*)expression;
 
-            SSNode* left_node = SSNode_Create(malloc(sizeof(SSNode)), node->assignee);
-            SSList_Append(list, left_node);
+            ListNode* left_node = listNode_create(malloc(sizeof(ListNode)), node->assignee);
+            list_append(list, left_node);
 
-            SSNode* right_node = SSNode_Create(malloc(sizeof(SSNode)), node->value);
-            SSList_Append(list, right_node);
+            ListNode* right_node = listNode_create(malloc(sizeof(ListNode)), node->value);
+            list_append(list, right_node);
 
             break;
         }
@@ -355,14 +355,14 @@ SSList* Get_Children(AstNode* expression)
         {
             CallExpression* node = (CallExpression*)expression;
 
-            SSNode* left_node = SSNode_Create(malloc(sizeof(SSNode)), node->callee);
-            SSList_Append(list, left_node);
+            ListNode* left_node = listNode_create(malloc(sizeof(ListNode)), node->callee);
+            list_append(list, left_node);
 
             if(node->args->first != NULL){
-                SSNode* cursor = node->args->first;
+                ListNode* cursor = node->args->first;
                 while(cursor != NULL){
-                    SSNode* arg_node = SSNode_Create(malloc(sizeof(SSNode)), cursor->value);
-                    SSList_Append(list, arg_node);
+                    ListNode* arg_node = listNode_create(malloc(sizeof(ListNode)), cursor->value);
+                    list_append(list, arg_node);
                     cursor = cursor->next;
                 }
             }
@@ -374,16 +374,16 @@ SSList* Get_Children(AstNode* expression)
             FunctionDeclaration* node = (FunctionDeclaration*)expression;
 
             if(node->args->first != NULL){
-                SSNode* cursor = node->args->first;
+                ListNode* cursor = node->args->first;
                 while(cursor != NULL){
-                    SSNode* arg_node = SSNode_Create(malloc(sizeof(SSNode)), cursor->value);
-                    SSList_Append(list, arg_node);
+                    ListNode* arg_node = listNode_create(malloc(sizeof(ListNode)), cursor->value);
+                    list_append(list, arg_node);
                     cursor = cursor->next;
                 }
             }
 
-            SSNode* left_node = SSNode_Create(malloc(sizeof(SSNode)), node->body);
-            SSList_Append(list, left_node);
+            ListNode* left_node = listNode_create(malloc(sizeof(ListNode)), node->body);
+            list_append(list, left_node);
             
             break;
         }
@@ -391,11 +391,11 @@ SSList* Get_Children(AstNode* expression)
         {
             BinaryExpression* node = (BinaryExpression*)expression;
 
-            SSNode* left_node = SSNode_Create(malloc(sizeof(SSNode)), node->left);
-            SSList_Append(list, left_node);
+            ListNode* left_node = listNode_create(malloc(sizeof(ListNode)), node->left);
+            list_append(list, left_node);
 
-            SSNode* right_node = SSNode_Create(malloc(sizeof(SSNode)), node->right);
-            SSList_Append(list, right_node);
+            ListNode* right_node = listNode_create(malloc(sizeof(ListNode)), node->right);
+            list_append(list, right_node);
 
             break;
         }
@@ -404,26 +404,26 @@ SSList* Get_Children(AstNode* expression)
         {
             BinaryExpression* node = (BinaryExpression*)expression;
 
-            SSNode* left_node = SSNode_Create(malloc(sizeof(SSNode)), node->left);
-            SSList_Append(list, left_node);
+            ListNode* left_node = listNode_create(malloc(sizeof(ListNode)), node->left);
+            list_append(list, left_node);
 
-            SSNode* right_node = SSNode_Create(malloc(sizeof(SSNode)), node->right);
-            SSList_Append(list, right_node);
+            ListNode* right_node = listNode_create(malloc(sizeof(ListNode)), node->right);
+            list_append(list, right_node);
 
             break;
         }
         case AST_IfStatement:{
             IfStatement* node = (IfStatement*)expression;
 
-            SSNode* test_node = SSNode_Create(malloc(sizeof(SSNode)), node->test);
-            SSList_Append(list, test_node);
+            ListNode* test_node = listNode_create(malloc(sizeof(ListNode)), node->test);
+            list_append(list, test_node);
 
-            SSNode* left_node = SSNode_Create(malloc(sizeof(SSNode)), node->consequent);
-            SSList_Append(list, left_node);
+            ListNode* left_node = listNode_create(malloc(sizeof(ListNode)), node->consequent);
+            list_append(list, left_node);
 
             if(node->alternate != NULL){
-                SSNode* right_node = SSNode_Create(malloc(sizeof(SSNode)), node->alternate);
-                SSList_Append(list, right_node);
+                ListNode* right_node = listNode_create(malloc(sizeof(ListNode)), node->alternate);
+                list_append(list, right_node);
             }
             
             break;
@@ -431,11 +431,11 @@ SSList* Get_Children(AstNode* expression)
         case AST_WhileStatement:{
             WhileStatement* node = (WhileStatement*)expression;
 
-            SSNode* test_node = SSNode_Create(malloc(sizeof(SSNode)), node->test);
-            SSList_Append(list, test_node);
+            ListNode* test_node = listNode_create(malloc(sizeof(ListNode)), node->test);
+            list_append(list, test_node);
 
-            SSNode* left_node = SSNode_Create(malloc(sizeof(SSNode)), node->body);
-            SSList_Append(list, left_node);
+            ListNode* left_node = listNode_create(malloc(sizeof(ListNode)), node->body);
+            list_append(list, left_node);
 
 
             
@@ -445,11 +445,11 @@ SSList* Get_Children(AstNode* expression)
         {
             MemberExpression* node = (MemberExpression*)expression;
 
-            SSNode* right_node = SSNode_Create(malloc(sizeof(SSNode)), node->object);
-            SSList_Append(list, right_node);
+            ListNode* right_node = listNode_create(malloc(sizeof(ListNode)), node->object);
+            list_append(list, right_node);
 
-            SSNode* left_node = SSNode_Create(malloc(sizeof(SSNode)), node->member);
-            SSList_Append(list, left_node);
+            ListNode* left_node = listNode_create(malloc(sizeof(ListNode)), node->member);
+            list_append(list, left_node);
 
             break;
         }
@@ -473,7 +473,7 @@ SSList* Get_Children(AstNode* expression)
     return list;
 }
 
-void Print_Node(AstNode* node)
+void astNode_print(AstNode* node)
 {
     switch (node->type)
     {
@@ -563,7 +563,7 @@ void Print_Node(AstNode* node)
     }
 }
 
-void Print_AST_Node(AstNode* node, char* indent, bool isLast){
+void ast_print(AstNode* node, char* indent, bool isLast){
     char* marker;
 
     if(isLast)
@@ -571,11 +571,11 @@ void Print_AST_Node(AstNode* node, char* indent, bool isLast){
     else
         marker = "├───";
 
-    SSList* children = Get_Children(node);
+    List* children = Get_Children(node);
 
     printf("%s", indent);
     printf("%s", marker);
-    Print_Node(node);
+    astNode_print(node);
     printf("\n");
 
     char *new_indent = (char*)malloc(strlen(indent) + 8);
@@ -593,19 +593,18 @@ void Print_AST_Node(AstNode* node, char* indent, bool isLast){
     else
         lastChild = (AstNode*)children->last->value;
 
-    SSNode* cursor = children->first;
+    ListNode* cursor = children->first;
     while(cursor != NULL){
-        Print_AST_Node(cursor->value, new_indent, cursor->next == NULL);
+        ast_print(cursor->value, new_indent, cursor->next == NULL);
         cursor = cursor->next;
     }
 
     // Cleanup
-    SSList_Free(children);
     free(new_indent);
 }
 
-void Prinst_AST(AstNode* program){
+void ast_print_begin(AstNode* program){
     printf("\n---------------- ABSTRACT SYNTAX TREE ----------------\n\n");
 
-    Print_AST_Node(program, "", true);
+    ast_print(program, "", true);
 }

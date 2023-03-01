@@ -9,8 +9,6 @@ Arena* arena_create();
 void* arena_malloc(Arena *arena, size_t size);
 void arena_destroy(Arena *arena);
 
-#define PAGE_SIZE 400000000
-
 struct Arena {
   uint8_t* region;
   size_t capacity;
@@ -36,17 +34,18 @@ void* arena_alloc(Arena* arena, size_t size) {
   Arena* last = arena;
   Arena* temp = arena;
 
-  while(temp != NULL)
-  { 
-      size_t remaining = temp->capacity - temp->used;
-
-      if(remaining >= size){
-        temp->used += size;
-        return &temp->region[temp->used - size];
-      }
-
+  while(temp != NULL) { 
       last = temp;
       temp = temp->next;
+  }
+
+  // We could do this check for every node, but we mostly allocate same size elements anyway.
+  // Hence it would probably never find a slot in a block that it didn't previously.
+  size_t remaining = last->capacity - last->used;
+  
+  if(remaining >= size) {
+    last->used += size;
+    return &last->region[last->used - size];
   }
 
   size_t allocation_size = size > last->capacity ? size : last->capacity * 2;

@@ -21,8 +21,8 @@ BlockStatement*         Parse_BlockStatement(Arena* arena);
 Expression* Parse_CallMemberExpression(Arena* arena);
 CallExpression* Parse_CallExpression(Arena* arena, Expression* caller);
 Expression* Parse_MemberExpression(Arena* arena);
-SSList* Parse_Args(Arena* arena);
-SSList* Parse_ArgumentsList(Arena* arena, SSList* args);
+List* Parse_Args(Arena* arena);
+List* Parse_ArgumentsList(Arena* arena, List* args);
 FunctionDeclaration* Parse_FunctionDeclaration(Arena* arena);
 
 //
@@ -36,25 +36,21 @@ size_t _current_index = 0;
 //  Helpers
 //
 
-bool End_Of_File()
-{
+bool End_Of_File(){
     return _tokens[_current_index].type == Token_EOF;
 }
 
-Token Current()
-{
+Token Current(){
     return _tokens[_current_index];
 }
 
-Token Consume()
-{
+Token Consume(){
     Token token = _tokens[_current_index];
     _current_index++;
     return token;
 }
 
-Token ConsumeExpect(TokenType type, char* error)
-{
+Token ConsumeExpect(TokenType type, char* error){
     Token token = _tokens[_current_index];
 
     if(type != token.type){
@@ -77,15 +73,15 @@ AstNode* Build_SyntaxTree(Token* tokens)
 
     _tokens = tokens;
 
-    Arena* arena = arena_create(10000000 * sizeof(AstNode));
+    Arena* arena = arena_create(500 * sizeof(AstNode));
 
-    BlockStatement* block = Create_BlockStatement(arena_alloc(arena, sizeof(AstNode)), arena_alloc(arena, sizeof(SSList)));
+    BlockStatement* block = Create_BlockStatement(arena_alloc(arena, sizeof(AstNode)), arena_alloc(arena, sizeof(List)));
 
     while(!End_Of_File()){
         AstNode* statement = Parse_Statement(arena);
 
-        SSNode* node = SSNode_Create(arena_alloc(arena, sizeof(SSNode)), statement);
-        SSList_Append(block->body, node);
+        ListNode* node = listNode_create(arena_alloc(arena, sizeof(ListNode)), statement);
+        list_append(block->body, node);
     }
 
     int64 t2 = timestamp();
@@ -129,7 +125,7 @@ FunctionDeclaration* Parse_FunctionDeclaration(Arena* arena)
     Token func_token = Consume();
     Token func_name = ConsumeExpect(Token_Identifier, "Function should be followed by an identifier");
 
-    SSList* args = SSList_Create(arena_alloc(arena, sizeof(SSList)));
+    List* args = list_create(arena_alloc(arena, sizeof(List)));
 
     ConsumeExpect(Token_OpenParen, "Function declaration should be followed by an open parenthesis.");
 
@@ -141,8 +137,8 @@ FunctionDeclaration* Parse_FunctionDeclaration(Arena* arena)
 
             Token identifierTok = ConsumeExpect(Token_Identifier, "func argument should be an identifier.");
             Identifier* identifier = Create_Identifier(arena_alloc(arena, sizeof(AstNode)), identifierTok.string_value);
-            SSNode* node = SSNode_Create(arena_alloc(arena, sizeof(AstNode)), identifier);
-            SSList_Append(args, node);
+            ListNode* node = listNode_create(arena_alloc(arena, sizeof(AstNode)), identifier);
+            list_append(args, node);
         } while((Current().type == Token_Comma));
     }
 
@@ -206,13 +202,13 @@ WhileStatement* Parse_WhileStatement(Arena* arena)
 BlockStatement* Parse_BlockStatement(Arena* arena){
     Consume(); // Open brace
 
-    BlockStatement* block = Create_BlockStatement(arena_alloc(arena, sizeof(AstNode)), arena_alloc(arena, sizeof(SSList)));
+    BlockStatement* block = Create_BlockStatement(arena_alloc(arena, sizeof(AstNode)), arena_alloc(arena, sizeof(List)));
 
     while(Current().type != Token_CloseBrace){
         AstNode* statement = Parse_Statement(arena);
-        SSNode* node = SSNode_Create(arena_alloc(arena, sizeof(SSNode)), statement);
+        ListNode* node = listNode_create(arena_alloc(arena, sizeof(ListNode)), statement);
 
-        SSList_Append(block->body, node);
+        list_append(block->body, node);
     }
 
     ConsumeExpect(Token_CloseBrace, "Missing close brace in block.");
@@ -249,7 +245,7 @@ TypeDeclaration* Parse_TypeDeclaration(Arena* arena)
     ConsumeExpect(Token_Assignment, "Error in type declaration");
     ConsumeExpect(Token_OpenBrace, "Error in type declaration");
 
-    TypeDeclaration* type_declaration = Create_TypeDeclaration(arena_alloc(arena, sizeof(AstNode)), arena_alloc(arena, sizeof(SSList)), identifier.string_value);
+    TypeDeclaration* type_declaration = Create_TypeDeclaration(arena_alloc(arena, sizeof(AstNode)), arena_alloc(arena, sizeof(List)), identifier.string_value);
 
     while(!End_Of_File() && Current().type != Token_CloseBrace){
         Token property_identifier = ConsumeExpect(Token_Identifier, "Error in type declaration");
@@ -257,8 +253,8 @@ TypeDeclaration* Parse_TypeDeclaration(Arena* arena)
 
         PropertyDeclaration* property_declaration = Create_PropertyDeclaration(arena_alloc(arena, sizeof(AstNode)), property_identifier.string_value);
 
-        SSNode* node = SSNode_Create(arena_alloc(arena, sizeof(AstNode)), property_declaration);
-        SSList_Append(type_declaration->properties, node);
+        ListNode* node = listNode_create(arena_alloc(arena, sizeof(AstNode)), property_declaration);
+        list_append(type_declaration->properties, node);
     }
 
     ConsumeExpect(Token_CloseBrace, "Error in type declaration");
@@ -383,10 +379,10 @@ CallExpression* Parse_CallExpression(Arena* arena, Expression* caller){
     return call_expr;
 }
 
-SSList* Parse_Args(Arena* arena)
+List* Parse_Args(Arena* arena)
 {
     ConsumeExpect(Token_OpenParen, "Args must start with open paren.");
-    SSList* args = SSList_Create(arena_alloc(arena, sizeof(SSList)));  
+    List* args = list_create(arena_alloc(arena, sizeof(List)));  
 
     if(Current().type == Token_CloseParen)
     {
@@ -402,19 +398,19 @@ SSList* Parse_Args(Arena* arena)
     return args;
 }
 
-SSList* Parse_ArgumentsList(Arena* arena, SSList* args)
+List* Parse_ArgumentsList(Arena* arena, List* args)
 {
     Expression* expr = Parse_AssignmentExpression(arena);
-    SSNode* node = SSNode_Create(arena_alloc(arena, sizeof(SSNode)), expr);
-    SSList_Append(args, node);
+    ListNode* node = listNode_create(arena_alloc(arena, sizeof(ListNode)), expr);
+    list_append(args, node);
 
     while (Current().type == Token_Comma)
     {
         Consume();
 
         Expression* expr = Parse_AssignmentExpression(arena);
-        SSNode* node = SSNode_Create(arena_alloc(arena, sizeof(SSNode)), expr);
-        SSList_Append(args, node);
+        ListNode* node = listNode_create(arena_alloc(arena, sizeof(ListNode)), expr);
+        list_append(args, node);
     }
 
     return args;
