@@ -1,7 +1,7 @@
 #pragma once
 
 typedef enum   NodeType NodeType;
-typedef struct Statement Statement;
+typedef struct AstNode AstNode;
 typedef struct BlockStatement BlockStatement;
 typedef struct Identifier Identifier;
 typedef struct NumericLiteral NumericLiteral;
@@ -51,14 +51,14 @@ struct BlockStatement
 struct IfStatement
 {
     ComparisonExpression* test;
-    Statement* consequent; // Statements
-    Statement* alternate; // Statements
+    AstNode* consequent; // Statements
+    AstNode* alternate; // Statements
 };
 
 struct WhileStatement
 {
     ComparisonExpression* test;
-    Statement* body;
+    AstNode* body;
 };
 
 struct FunctionDeclaration{
@@ -125,7 +125,7 @@ struct BinaryExpression
     Expression* right;
 };
 
-struct Statement 
+struct AstNode 
 {
     union
     {
@@ -149,22 +149,22 @@ struct Statement
 };
 
 struct Expression {
-    Statement statement;
+    AstNode statement;
 };
 
 //
 // Initializers
 //
 
-BlockStatement* Create_BlockStatement(Statement* memory, SSList* body)
+BlockStatement* Create_BlockStatement(AstNode* node, SSList* body)
 {
-    memory->type = AST_BlockStatement;
-    memory->block_statement.body = SSList_Create(body);
+    node->type = AST_BlockStatement;
+    node->block_statement.body = SSList_Create(body);
 
-    return (BlockStatement*)memory;
+    return (BlockStatement*)node;
 }
 
-FunctionDeclaration* Create_FunctionDeclaration(Statement* memory, BufferString name, SSList* args, BlockStatement* block)
+FunctionDeclaration* Create_FunctionDeclaration(AstNode* memory, BufferString name, SSList* args, BlockStatement* block)
 {
     memory->type = AST_FunctionDeclaration;
     memory->function_declaration.args = args;
@@ -174,7 +174,7 @@ FunctionDeclaration* Create_FunctionDeclaration(Statement* memory, BufferString 
     return (FunctionDeclaration*)memory;
 }
 
-VariableDeclaration* Create_VariableDeclaration(Statement* memory, BufferString name, Expression* value)
+VariableDeclaration* Create_VariableDeclaration(AstNode* memory, BufferString name, Expression* value)
 {
     memory->type = AST_VariableDeclaration;
     memory->variable_declaration.value = value;
@@ -185,7 +185,7 @@ VariableDeclaration* Create_VariableDeclaration(Statement* memory, BufferString 
     return (VariableDeclaration*)memory;
 }
 
-TypeDeclaration* Create_TypeDeclaration(Statement* memory, SSList* member_list_memory, BufferString name)
+TypeDeclaration* Create_TypeDeclaration(AstNode* memory, SSList* member_list_memory, BufferString name)
 {
     memory->type = AST_TypeDefinition;
     memory->type_declaration.properties = SSList_Create(member_list_memory);
@@ -196,7 +196,7 @@ TypeDeclaration* Create_TypeDeclaration(Statement* memory, SSList* member_list_m
     return (TypeDeclaration*)memory;
 }
 
-PropertyDeclaration* Create_PropertyDeclaration(Statement* memory, BufferString name)
+PropertyDeclaration* Create_PropertyDeclaration(AstNode* memory, BufferString name)
 {
     memory->type = AST_PropertyDeclaration;
 
@@ -206,7 +206,7 @@ PropertyDeclaration* Create_PropertyDeclaration(Statement* memory, BufferString 
     return (PropertyDeclaration*)memory;
 }
 
-CallExpression* Create_CallExpression(Statement* memory, Expression* callee, SSList* args)
+CallExpression* Create_CallExpression(AstNode* memory, Expression* callee, SSList* args)
 {
     memory->type = AST_CallExpression;
     memory->call_expression.callee = callee;
@@ -215,7 +215,7 @@ CallExpression* Create_CallExpression(Statement* memory, Expression* callee, SSL
     return (CallExpression*)memory;
 }
 
-MemberExpression* Create_MemberExpression(Statement* memory, Expression* object, Identifier* member)
+MemberExpression* Create_MemberExpression(AstNode* memory, Expression* object, Identifier* member)
 {
     memory->type = AST_MemberExpression;
     memory->member_expression.object = object;
@@ -224,7 +224,7 @@ MemberExpression* Create_MemberExpression(Statement* memory, Expression* object,
     return (MemberExpression*)memory;
 }
 
-AssignmentExpression* Create_AssignmentExpression(Statement* memory, Expression* assignee, Expression* value)
+AssignmentExpression* Create_AssignmentExpression(AstNode* memory, Expression* assignee, Expression* value)
 {
     memory->type = AST_AssignmentExpression;
     memory->assignment_expression.assignee = assignee;
@@ -233,7 +233,7 @@ AssignmentExpression* Create_AssignmentExpression(Statement* memory, Expression*
     return (AssignmentExpression*)memory;
 }
 
-BinaryExpression* Create_BinaryExpression(Statement* memory, Expression* left, char* operatr, Expression* right)
+BinaryExpression* Create_BinaryExpression(AstNode* memory, Expression* left, char* operatr, Expression* right)
 {
     memory->type = AST_BinaryExpression;
     memory->binary_expression.left = left;
@@ -244,7 +244,7 @@ BinaryExpression* Create_BinaryExpression(Statement* memory, Expression* left, c
     return (BinaryExpression*)memory;
 }
 
-ComparisonExpression* Create_ComparisonExpression(Statement* memory, Expression* left, char* operatr, Expression* right)
+ComparisonExpression* Create_ComparisonExpression(AstNode* memory, Expression* left, char* operatr, Expression* right)
 {
     memory->type = AST_ComparisonExpression;
     memory->comparison_expression.left = left;
@@ -255,7 +255,7 @@ ComparisonExpression* Create_ComparisonExpression(Statement* memory, Expression*
     return (ComparisonExpression*)memory;
 }
 
-IfStatement* Create_IfStatement(Statement* memory, ComparisonExpression* test, Statement* consequent, Statement* alternate)
+IfStatement* Create_IfStatement(AstNode* memory, ComparisonExpression* test, AstNode* consequent, AstNode* alternate)
 {
     memory->type = AST_IfStatement;
     memory->ifStatement.test = test;
@@ -265,7 +265,7 @@ IfStatement* Create_IfStatement(Statement* memory, ComparisonExpression* test, S
     return (IfStatement*)memory;
 }
 
-WhileStatement* Create_WhileStatement(Statement* memory, ComparisonExpression* test, Statement* body)
+WhileStatement* Create_WhileStatement(AstNode* memory, ComparisonExpression* test, AstNode* body)
 {
     memory->type = AST_WhileStatement;
     memory->while_statement.test = test;
@@ -274,7 +274,7 @@ WhileStatement* Create_WhileStatement(Statement* memory, ComparisonExpression* t
     return (WhileStatement*)memory;
 }
 
-Identifier* Create_Identifier(Statement* memory, BufferString name)
+Identifier* Create_Identifier(AstNode* memory, BufferString name)
 {
     memory->type = AST_Identifier;
     memory->identifier.name.start = name.start;
@@ -283,7 +283,7 @@ Identifier* Create_Identifier(Statement* memory, BufferString name)
     return (Identifier*)memory;
 }
 
-NumericLiteral* Create_NumericLiteral(Statement* memory, int64 value)
+NumericLiteral* Create_NumericLiteral(AstNode* memory, int64 value)
 {
     memory->type = AST_NumericLiteral;
     memory->numeric_literal.value = value;
@@ -291,7 +291,7 @@ NumericLiteral* Create_NumericLiteral(Statement* memory, int64 value)
     return (NumericLiteral*)memory;
 }
 
-StringLiteral* Create_StringLiteral(Statement* memory, BufferString value)
+StringLiteral* Create_StringLiteral(AstNode* memory, BufferString value)
 {
     memory->type = AST_StringLiteral;
     memory->string_literal.value = value;
@@ -302,7 +302,7 @@ StringLiteral* Create_StringLiteral(Statement* memory, BufferString value)
 //
 // Visualizing
 //
-SSList* Get_Children(Statement* expression)
+SSList* Get_Children(AstNode* expression)
 {
     SSList* list = malloc(sizeof(SSList));
     list->first = NULL;
@@ -312,7 +312,7 @@ SSList* Get_Children(Statement* expression)
     {
         case AST_BlockStatement:
         {
-            Statement* node = expression;
+            AstNode* node = expression;
             return node->block_statement.body;
 
             break;
@@ -473,7 +473,7 @@ SSList* Get_Children(Statement* expression)
     return list;
 }
 
-void Print_Node(Statement* node)
+void Print_Node(AstNode* node)
 {
     switch (node->type)
     {
@@ -563,7 +563,7 @@ void Print_Node(Statement* node)
     }
 }
 
-void Print_AST_Node(Statement* node, char* indent, bool isLast){
+void Print_AST_Node(AstNode* node, char* indent, bool isLast){
     char* marker;
 
     if(isLast)
@@ -586,12 +586,12 @@ void Print_AST_Node(Statement* node, char* indent, bool isLast){
     else
         strcat(new_indent, "│   ");
 
-    Statement* lastChild;
+    AstNode* lastChild;
 
     if(children->first == NULL)
         lastChild = NULL;
     else
-        lastChild = (Statement*)children->last->value;
+        lastChild = (AstNode*)children->last->value;
 
     SSNode* cursor = children->first;
     while(cursor != NULL){
@@ -604,7 +604,7 @@ void Print_AST_Node(Statement* node, char* indent, bool isLast){
     free(new_indent);
 }
 
-void Prinst_AST(Statement* program){
+void Prinst_AST(AstNode* program){
     printf("\n---------------- ABSTRACT SYNTAX TREE ----------------\n\n");
 
     Print_AST_Node(program, "", true);

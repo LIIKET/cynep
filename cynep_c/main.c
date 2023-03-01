@@ -11,6 +11,7 @@
 #include "util/list.c"
 #include "util/file.c"
 #include "util/array.c"
+#include "util/arena.c"
 
 #include "frontend/lexer.c"
 #include "frontend/ast.c"
@@ -49,9 +50,11 @@ int main(int argc, char**argv)
 
     int64 total_begin = timestamp();
 
+    size_t asd = sizeof(AstNode);
+
     SourceFile* file = File_Read_Text("input.cynep");
     Token* tokens = lexer_tokenize(file);
-    Statement* program = Build_SyntaxTree(tokens);
+    AstNode* program = Build_SyntaxTree(tokens);
 
     // Setup global object
     Global* global = Create_Global();
@@ -61,13 +64,13 @@ int main(int argc, char**argv)
 
 
     // Compile
-    CodeObject codeObject = Compile((Statement*)program, global);
+    CodeObject codeObject = Compile((AstNode*)program, global);
 
     int64 total_end = timestamp();
     printf("Total: %d ms\n", total_end/1000-total_begin/1000);
 
     if (show_ast) 
-        Prinst_AST((Statement*)program);
+        Prinst_AST((AstNode*)program);
     
     if (show_disassemble) 
         Disassemble(global);

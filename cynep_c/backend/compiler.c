@@ -1,9 +1,9 @@
 #pragma once
 
-CodeObject  Compile(Statement* statement, Global* global);
+CodeObject  Compile(AstNode* statement, Global* global);
 size_t      Get_Offset(CodeObject* co);
 size_t      Numeric_Const_Index(CodeObject* co, float64 value);
-void        Gen(CodeObject* co, Statement* statement, Global* global);
+void        Gen(CodeObject* co, AstNode* statement, Global* global);
 void        Emit(CodeObject* co, uint8_t code);
 void        Write_Address_At_Offset(CodeObject* co, size_t offset, uint64_t value);
 // void        Write_Byte_At_Offset(CodeObject* co, size_t offset, uint8_t value);
@@ -25,7 +25,7 @@ RuntimeValue Create_CodeObjectValue(BufferString name, size_t arity){
     return value;
 }
 
-CodeObject Compile(Statement* statement, Global* global){
+CodeObject Compile(AstNode* statement, Global* global){
 
     code_objects= malloc(sizeof(void*) * 100); // TODO: DANGER! Handle memory! 100 000 000, Crashes if too many constants
 
@@ -59,14 +59,14 @@ CodeObject Compile(Statement* statement, Global* global){
     return *co;
 }
 
-void Gen(CodeObject* co, Statement* statement, Global* global){
+void Gen(CodeObject* co, AstNode* statement, Global* global){
     switch (statement->type)
     {
         case AST_BinaryExpression:{
             BinaryExpression expression = *(BinaryExpression*)statement;
 
-            Gen(co, (Statement*)expression.left, global);
-            Gen(co, (Statement*)expression.right, global);
+            Gen(co, (AstNode*)expression.left, global);
+            Gen(co, (AstNode*)expression.right, global);
 
             if(expression.operator[0] == '+'){
                 Emit(co, OP_ADD);
@@ -86,8 +86,8 @@ void Gen(CodeObject* co, Statement* statement, Global* global){
         case AST_ComparisonExpression: {
             BinaryExpression expression = *(BinaryExpression*)statement;
 
-            Gen(co, (Statement*)expression.left, global);
-            Gen(co, (Statement*)expression.right, global);
+            Gen(co, (AstNode*)expression.left, global);
+            Gen(co, (AstNode*)expression.right, global);
 
             if(expression.operator[0] == '>'
             && expression.operator[1] == NULL_CHAR){
@@ -126,13 +126,13 @@ void Gen(CodeObject* co, Statement* statement, Global* global){
         case AST_IfStatement: {
             IfStatement expression = *(IfStatement*)statement;
 
-            Gen(co, (Statement*)expression.test, global); // Emit test
+            Gen(co, (AstNode*)expression.test, global); // Emit test
             Emit(co, OP_JMP_IF_FALSE); 
 
             Emit64(co, 0); // 64 bit for alternate address
             size_t else_jmp_address = Get_Offset(co) - 8; // 8 bytes for 64 bit
 
-            Gen(co, (Statement*)expression.consequent, global); // Emit consequent
+            Gen(co, (AstNode*)expression.consequent, global); // Emit consequent
 
             Emit(co, OP_JMP); 
             Emit64(co, 0); // 64 bit for end address
@@ -144,7 +144,7 @@ void Gen(CodeObject* co, Statement* statement, Global* global){
 
             if(expression.alternate != NULL){
                 // Emit alternate if present
-                Gen(co, (Statement*)expression.alternate, global); 
+                Gen(co, (AstNode*)expression.alternate, global); 
             }
 
             // Patch end of "if" address
@@ -159,13 +159,13 @@ void Gen(CodeObject* co, Statement* statement, Global* global){
 
             size_t loop_start_address = Get_Offset(co);
 
-            Gen(co, (Statement*)expression.test, global); // Emit test
+            Gen(co, (AstNode*)expression.test, global); // Emit test
 
             Emit(co, OP_JMP_IF_FALSE); 
             size_t loop_end_jmp_address = Get_Offset(co);
             Emit64(co, 0);
 
-            Gen(co, (Statement*)expression.body, global); // Emit block
+            Gen(co, (AstNode*)expression.body, global); // Emit block
 
             Emit(co, OP_JMP); 
             size_t end_address = Get_Offset(co);
@@ -210,7 +210,7 @@ void Gen(CodeObject* co, Statement* statement, Global* global){
             new_co->scope_level = 1;
 
             // Generate body
-            Statement* asd = (Statement*)functionDeclaration.body;
+            AstNode* asd = (AstNode*)functionDeclaration.body;
             Gen(new_co, asd, global);
 
             // Here goes cleanup if we add functions without block as body
@@ -257,14 +257,14 @@ void Gen(CodeObject* co, Statement* statement, Global* global){
             SSNode* current_node = blockStatement.body->first;
             while (current_node != NULL)
             {
-                Statement* test = ((Statement*)current_node->value);
+                AstNode* test = ((AstNode*)current_node->value);
 
                 Gen(co, current_node->value, global);
 
                 // Pop if not last last (last is return value)
                 bool is_local_declaration = 
-                    (((Statement*)current_node->value)->type == AST_VariableDeclaration && !Is_Global_Scope(co) 
-                    || ((Statement*)current_node->value)->type == AST_IfStatement);
+                    (((AstNode*)current_node->value)->type == AST_VariableDeclaration && !Is_Global_Scope(co) 
+                    || ((AstNode*)current_node->value)->type == AST_IfStatement);
 
                 if(is_local_declaration == false  ){ // && (current_node->next != NULL)
                     Emit(co, OP_POP);
@@ -358,7 +358,7 @@ void Gen(CodeObject* co, Statement* statement, Global* global){
         case AST_VariableDeclaration: {
             VariableDeclaration variableDeclaration = *(VariableDeclaration*)statement;
             if(variableDeclaration.value != NULL){
-                Gen(co, (Statement*)variableDeclaration.value, global);
+                Gen(co, (AstNode*)variableDeclaration.value, global);
             }
             else{
                 // Emit null if no value
@@ -391,7 +391,7 @@ void Gen(CodeObject* co, Statement* statement, Global* global){
             Identifier* identifier = (Identifier*)assignmentExpression.assignee; // TODO: Handle expressions
 
             // Emit value
-            Gen(co, (Statement*)assignmentExpression.value, global);
+            Gen(co, (AstNode*)assignmentExpression.value, global);
 
             // 1. Locals
             int64 local_index = Local_GetIndexBufferString(co, &identifier->name);
@@ -419,7 +419,7 @@ void Gen(CodeObject* co, Statement* statement, Global* global){
             CallExpression callExpression = *(CallExpression*)statement; 
 
             // Emit function
-            Gen(co, (Statement*)callExpression.callee, global);
+            Gen(co, (AstNode*)callExpression.callee, global);
 
             // Valitade arity
             
@@ -438,7 +438,7 @@ void Gen(CodeObject* co, Statement* statement, Global* global){
 
             while (cursor != NULL)
             {
-                Gen(co, (Statement*)cursor->value, global);
+                Gen(co, (AstNode*)cursor->value, global);
                 cursor = cursor->next;
             }
 

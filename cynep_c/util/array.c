@@ -32,7 +32,9 @@ void MemPool_MaybeGrow(MemPool* pool, size_t requested_size) {
 MemPool_Record MemPool_GetMem(MemPool* pool, size_t size){
     MemPool_MaybeGrow(pool, size);
 
-    MemPool_Record record;
+    MemPool_Record record = {
+        .pointer = NULL
+    };
 
     record.pointer = &pool->bytes[pool->used_bytes];
     record.index = pool->used_bytes;
@@ -45,7 +47,6 @@ MemPool_Record MemPool_GetMem(MemPool* pool, size_t size){
 
 
 
-// ---------------- bump allocator
 
-u8* buffer = NULL;
+
 
