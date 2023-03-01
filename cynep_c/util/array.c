@@ -41,3 +41,11 @@ MemPool_Record MemPool_GetMem(MemPool* pool, size_t size){
 
     return record;
 }
+
+
+
+
+// ---------------- bump allocator
+
+u8* buffer = NULL;
+

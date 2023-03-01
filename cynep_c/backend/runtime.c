@@ -22,7 +22,8 @@ uint8_t         VM_Peek_Byte(VM* vm);
 uint64_t        VM_Read_Address(VM* vm);
 void            VM_Stack_Push(VM* vm, RuntimeValue* value);
 void            VM_Exception(char* msg);
-void VM_DumpStack(VM* vm);
+void VM_DumpStack(VM* vm, uint8_t code);
+char* opcodeToString(uint8_t opcode);
 
 #pragma region TYPES
 
@@ -76,7 +77,7 @@ struct CodeObject
     Object object;
     char* name;
     size_t arity;
-    size_t name_length;
+
     uint8_t* code; // Array of opcodes
     size_t code_last;
     RuntimeValue* constants;
@@ -158,9 +159,9 @@ char* RuntimeValue_ToString(RuntimeValue value){
     }
     if(value.type == ValueType_Object && value.object->objectType == ObjectType_Code){
         CodeObject code = AS_CODE(value);
-        char* buf = malloc(sizeof(char) * buff_size);
-        strncpy(buf, code.name, code.name_length);
-        return buf;
+        //char* buf = malloc(sizeof(char) * buff_size);
+        //strncpy(buf, code.name, code.name_length);
+        return code.name;
     }
     if(value.type == ValueType_Object && value.object->objectType == ObjectType_String){
         StringObject str = AS_STRING(value);
@@ -254,17 +255,23 @@ RuntimeValue Alloc_String_From_BufferString(BufferString* value){
     return result;
 }
 
-RuntimeValue Alloc_Code(char* name, size_t name_length){
+RuntimeValue Alloc_Code(BufferString* name, size_t arity){
     RuntimeValue result;
     result.type = ValueType_Object;
 
     CodeObject* co = malloc(sizeof(CodeObject));
     co->object.objectType = ObjectType_Code;
-    co->name = name;
-    co->name_length = name_length;
+    co->name = malloc(name->length * sizeof(char) + 1);
+    co->code = malloc(sizeof(uint8_t) * 100000000); // TODO: DANGER! Handle memory! 100 000 000, Crashes if too many instructions
+    co->constants = malloc(sizeof(RuntimeValue*) * 100); // TODO: DANGER! Handle memory! 100 000 000, Crashes if too many constants
     co->code_last = 0;
     co->constants_last = 0;
     co->scope_level = 0;
+    co->arity = arity;
+
+
+    strncpy(co->name, name->start, name->length);
+    co->name[name->length] = NULL_CHAR;
 
     co->locals = malloc(sizeof(LocalVar) * 10); // TODO: DANGER! Handle memory when adding
     co->locals_size = 0;
@@ -401,6 +408,21 @@ void Local_Define(CodeObject* co, BufferString* name){
     var->value = RUNTIME_NULL(); // TODO: Set to null
 }
 
+LocalVar Local_Get(CodeObject* co, int64 index){
+    return co->locals[index];
+}
+
+// void Local_Add(CodeObject* co, BufferString* name){
+//     if(Local_GetIndexBufferString(co, name) != -1){
+//         return;
+//     }
+
+//     LocalVar* var = &co->locals[co->locals_size];
+//     var->scope_level = co->scope_level;
+//     var->name = name;
+//     co->locals_size++;
+// }
+
 #pragma endregion
 
 #pragma region VIRTUAL_MACHINE
@@ -421,6 +443,7 @@ void Local_Define(CodeObject* co, BufferString* name){
 #define OP_SET_LOCAL        0x0D
 #define OP_SCOPE_EXIT       0x0E
 #define OP_CALL             0x0F
+#define OP_RETURN           0x10
 
 #define OP_CMP_GT           0x01
 #define OP_CMP_LT           0x02
@@ -460,15 +483,15 @@ RuntimeValue VM_Eval(VM* vm, CodeObject* co, Global* global){
         uint8_t opcode = VM_Read_Byte(vm);
 
         // Introspect stack for debugging
-        // VM_DumpStack(vm);
+        // VM_DumpStack(vm, opcode);
 
         switch (opcode)
         {
             case OP_HALT:{
                 int64 t2 = timestamp();
                 printf("Execution time: %d ms\n", t2/1000-t1/1000);
-                
-                return VM_Stack_Pop(vm);
+                return RUNTIME_NULL(); // Hack!!!
+                //return VM_Stack_Pop(vm); 
             }     
 
             case OP_CONST: {
@@ -731,7 +754,7 @@ void VM_Stack_Push(VM* vm, RuntimeValue* value){
 }
 
 RuntimeValue VM_Stack_Pop(VM* vm){
-    if(vm->sp < vm->stack_start){
+    if(vm->sp == vm->stack_start){
         VM_Exception("Stack Empty");
     }
     vm->sp--;
@@ -750,20 +773,27 @@ void VM_Exception(char* msg){
     exit(0);
 }
 
-void VM_DumpStack(VM* vm){
-    printf("---------- STACK ------------\n");
-    if(vm->sp == vm->stack){
+void VM_DumpStack(VM* vm, uint8_t code){
+    // size_t offset = vm->ip;
+    char* op  = opcodeToString(code);
+    printf("------------------ STACK AT %-10s -------------\n", op);
+
+    if(vm->sp == vm->stack_start){
         printf("(empty)\n");
     }
+    else if(vm->sp < vm->stack_start){
+           printf("(less)\n");     
+    }
     else{
-        RuntimeValue* csp = vm->stack;
-        while(csp < vm->sp){
-            char* asd = RuntimeValue_ToString(*csp++);
+        RuntimeValue* csp = vm->sp - 1;
+        while(csp >= vm->stack){
+            char* asd = RuntimeValue_ToString(*csp--);
 
             printf("%s\n", asd);
-            // *csp--;
         }
     }
+
+    printf("\n");
 }
 
 #pragma endregion

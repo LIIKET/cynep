@@ -1,1 +1,8 @@
-Fixa så att lexer hanterar identifierare med en bokstav.
+TODO:
+
+- Faster file read!
+- Eliminate all inner looping in lexer. Think state machine.
+- Build constants array in lexer. We could then scrap BufferString struct and rely on NULL termination.
+- Eliminate ALL branching in runtime! Replace with more opcodes.
+- Remove ALL useless bytes from bytecode format. Only code addresses should need to be 64 bit for instance.
+

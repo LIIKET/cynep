@@ -70,7 +70,7 @@ int main(int argc, char**argv)
         Prinst_AST((Statement*)program);
     
     if (show_disassemble) 
-        Disassemble(&codeObject, global);
+        Disassemble(global);
 
     // Start execution
     VM virtualMachine;

@@ -9,29 +9,54 @@ void        Write_Address_At_Offset(CodeObject* co, size_t offset, uint64_t valu
 // void        Write_Byte_At_Offset(CodeObject* co, size_t offset, uint8_t value);
 void        Emit64(CodeObject* co, uint64_t value);
 int64       String_Const_Index(CodeObject* co, BufferString* string);
+bool Is_Global_Scope(CodeObject* co);
+
+// Context
+CodeObject** code_objects;
+size_t code_objects_length;
+
+RuntimeValue Create_CodeObjectValue(BufferString name, size_t arity){
+    RuntimeValue value = Alloc_Code(&name, arity);
+    CodeObject* co = &AS_CODE(value);
+
+    code_objects[code_objects_length] = co;
+    code_objects_length++;
+
+    return value;
+}
 
 CodeObject Compile(Statement* statement, Global* global){
+
+    code_objects= malloc(sizeof(void*) * 100); // TODO: DANGER! Handle memory! 100 000 000, Crashes if too many constants
+
     int64 compile_begin = timestamp();
-    CodeObject co = AS_CODE(Alloc_Code("main", 4));
+
+    BufferString name;
+    name.start = "main";
+    name.length = 4;
+
+
+    RuntimeValue codeValue = Create_CodeObjectValue(name, 0);
+    CodeObject* co = &AS_CODE(codeValue);
+
 
     // TODO: Need a growing array for this
-    co.code = malloc(sizeof(uint8_t) * 100000000); // TODO: DANGER! Handle memory! 100 000 000, Crashes if too many instructions
-    co.constants = malloc(sizeof(RuntimeValue) * 100); // TODO: DANGER! Handle memory! 100 000 000, Crashes if too many constants
+
 
     // Setup null, true and false consts. Compiler assumes this index order!
-    co.constants[co.constants_last++] = RUNTIME_NULL();
-    co.constants[co.constants_last++] = BOOLEAN(true);
-    co.constants[co.constants_last++] = BOOLEAN(false);
+    co->constants[co->constants_last++] = RUNTIME_NULL();
+    co->constants[co->constants_last++] = BOOLEAN(true);
+    co->constants[co->constants_last++] = BOOLEAN(false);
 
 
-    Gen(&co, statement, global);
+    Gen(co, statement, global);
 
-    Emit(&co, OP_HALT);
+    Emit(co, OP_HALT);
 
     int64 compile_end = timestamp();
     printf("Compiling: %d ms\n", compile_end/1000-compile_begin/1000);
 
-    return co;
+    return *co;
 }
 
 void Gen(CodeObject* co, Statement* statement, Global* global){
@@ -108,8 +133,8 @@ void Gen(CodeObject* co, Statement* statement, Global* global){
             size_t else_jmp_address = Get_Offset(co) - 8; // 8 bytes for 64 bit
 
             Gen(co, (Statement*)expression.consequent, global); // Emit consequent
-            Emit(co, OP_JMP); 
 
+            Emit(co, OP_JMP); 
             Emit64(co, 0); // 64 bit for end address
             size_t end_address = Get_Offset(co) - 8; // 8 bytes for 64 bit
 
@@ -120,12 +145,6 @@ void Gen(CodeObject* co, Statement* statement, Global* global){
             if(expression.alternate != NULL){
                 // Emit alternate if present
                 Gen(co, (Statement*)expression.alternate, global); 
-            }
-            else{
-                // TODO: NULL if no alternate branch
-                // Emit(co, OP_CONST);
-                // size_t index = Numeric_Const_Index(co, -999);
-                // Emit64(co, index);
             }
 
             // Patch end of "if" address
@@ -156,11 +175,76 @@ void Gen(CodeObject* co, Statement* statement, Global* global){
             size_t end_branch_address = Get_Offset(co);
             Write_Address_At_Offset(co, loop_end_jmp_address, end_branch_address);
 
+            // Hack to have something to pop when loop ends in BlockStatement
+            Emit(co, OP_CONST);
+            Emit64(co, 0);
+
             break;
         }
 
         case AST_FunctionDeclaration: {
-            // TODO: IMPLEMENT
+            FunctionDeclaration functionDeclaration = *(FunctionDeclaration*)statement;
+
+            BufferString name = functionDeclaration.name;
+            size_t arity = functionDeclaration.args->count;
+
+            RuntimeValue coValue = Create_CodeObjectValue(name, arity);
+            CodeObject* new_co = &AS_CODE(coValue);
+
+            new_co->scope_level = 2;
+
+            // Store function as constant in previous
+            co->constants[co->constants_last++] = coValue;
+
+            // add local so function can call itself
+            Local_Define(new_co, &name);
+            
+
+            SSNode* current_node = functionDeclaration.args->first;
+            while (current_node != NULL)
+            {
+                Identifier* identifier = ((Identifier*)current_node->value);
+                Local_Define(new_co, &identifier->name);
+                current_node = current_node->next;
+            }
+            new_co->scope_level = 1;
+
+            // Generate body
+            Statement* asd = (Statement*)functionDeclaration.body;
+            Gen(new_co, asd, global);
+
+            // Here goes cleanup if we add functions without block as body
+
+
+            Emit(new_co, OP_RETURN);
+
+            // Add function as constant
+             co->constants[co->constants_last++] = coValue;
+
+            // // Emit code for this new constant
+            Emit(co, OP_CONST);
+            Emit64(co, co->constants_last-1);
+
+
+            // Emit variable set
+
+            if(Is_Global_Scope(co)) // If global scope
+            { 
+                Global_Define(global, &functionDeclaration.name); // This should return index directly
+                int64 index = Global_GetIndexBufferString(global, &functionDeclaration.name);
+
+                Emit(co, OP_SET_GLOBAL);
+                Emit64(co, index);
+            }
+            else // Handle scoped variables
+            {
+                Local_Define(co, &functionDeclaration.name); // This should return index directly
+                int64 index = Local_GetIndexBufferString(co, &functionDeclaration.name);
+
+                Emit(co, OP_SET_LOCAL);
+                Emit64(co, index);
+            }
+
             break;
         }
 
@@ -179,9 +263,10 @@ void Gen(CodeObject* co, Statement* statement, Global* global){
 
                 // Pop if not last last (last is return value)
                 bool is_local_declaration = 
-                    ((Statement*)current_node->value)->type == AST_VariableDeclaration && co->scope_level > 0;
+                    (((Statement*)current_node->value)->type == AST_VariableDeclaration && !Is_Global_Scope(co) 
+                    || ((Statement*)current_node->value)->type == AST_IfStatement);
 
-                if(!is_local_declaration){ // current_node->next != NULL && 
+                if(is_local_declaration == false  ){ // && (current_node->next != NULL)
                     Emit(co, OP_POP);
                 }
 
@@ -189,17 +274,21 @@ void Gen(CodeObject* co, Statement* statement, Global* global){
             }
 
             // Scope exit
-            if(co->scope_level > 0){
-                uint64 vars_to_pop = 0;
+            if(!Is_Global_Scope(co)){
+
+                // We need to pop all vars declared in this scope, from the stack.
+                uint64 vars_declared_in_scope_count = 0;
                 while (co->locals_size > 0 && co->locals[co->locals_size - 1].scope_level == co->scope_level)
                 {
-                    vars_to_pop++;
+                    vars_declared_in_scope_count++;
                     co->locals_size--;
                 }
                 
-             
-                Emit(co, OP_SCOPE_EXIT);
-                Emit64(co, vars_to_pop);
+                if(vars_declared_in_scope_count > 0 || co->arity > 0){
+                    Emit(co, OP_SCOPE_EXIT);
+                    Emit64(co, vars_declared_in_scope_count);
+                }
+
                 co->scope_level--;
             }
 
@@ -368,6 +457,10 @@ void Gen(CodeObject* co, Statement* statement, Global* global){
     }
 }
 
+bool Is_Global_Scope(CodeObject* co){
+    return co->scope_level == 1;
+}
+
 size_t Numeric_Const_Index(CodeObject* co, float64 value){
     for (size_t i = 0; i < co->constants_last + 1; i++)
     {
@@ -447,8 +540,11 @@ char* opcodeToString(uint8_t opcode){
         case OP_SET_GLOBAL: return "SET_GLOBAL";
         case OP_GET_LOCAL: return "GET_LOCAL";
         case OP_SET_LOCAL: return "SET_LOCAL";
-        case OP_SCOPE_EXIT: return "SCOPE_EXIT:";
-        default: return "NOT IMPLEMENTED";
+        case OP_SCOPE_EXIT: return "SCOPE_EXIT";
+        case OP_RETURN: return "RETURN";
+        default: {
+            return "NOT IMPLEMENTED";
+        }
     }
 }
 
@@ -465,10 +561,16 @@ char* cmpCodeToString(uint8_t cmpcode){
     }
 }
 
-void Disassemble(CodeObject* co, Global* global){
-    printf("\n------------------ MAIN DISASSEMBLY ------------------\n\n");
+void Disassemble(Global* global){
 
-    size_t offset = 0;
+
+    for (size_t i = 0; i < code_objects_length; i++)
+    {
+        CodeObject* co = code_objects[i];
+
+    printf("\n------------------ %s DISASSEMBLY ------------------\n\n", co->name);
+
+size_t offset = 0;
     while(offset < co->code_last){
         uint8_t opcode = co->code[offset];
         uint64_t args;
@@ -510,13 +612,13 @@ void Disassemble(CodeObject* co, Global* global){
 
         if(opcode == OP_GET_LOCAL){
             printf("%-7u", args);
-            // printf("(%s)", Global_Get(global, args).name);
+            printf("(%s)", Local_Get(co, args).name);
             offset += 8;
         }
 
         if(opcode == OP_SET_LOCAL){
             printf("%-7u", args);
-            // printf("(%s)", Global_Get(global, args).name);
+            printf("(%s)", Local_Get(co, args).name);
             offset += 8;
         }
 
@@ -546,6 +648,12 @@ void Disassemble(CodeObject* co, Global* global){
     }
 
     printf("\n");
+
+
+    }
+    
+
+    
 }
 
 #pragma endregion
