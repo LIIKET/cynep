@@ -43,92 +43,77 @@ enum NodeType
     AST_Identifier,
 };
 
-struct BlockStatement 
-{
+struct BlockStatement {
     List* body; // Statements
 };
 
-struct IfStatement
-{
+struct IfStatement {
     ComparisonExpression* test;
     AstNode* consequent; // Statements
     AstNode* alternate; // Statements
 };
 
-struct WhileStatement
-{
+struct WhileStatement {
     ComparisonExpression* test;
     AstNode* body;
 };
 
-struct FunctionDeclaration{
+struct FunctionDeclaration {
     BufferString name;
     List* args; // List of identifiers, TODO: Replace with arg struct containing type info?
     BlockStatement* body;
 };
 
-struct Identifier 
-{
+struct Identifier {
     BufferString name;
 };
 
-struct NumericLiteral 
-{
+struct NumericLiteral {
     int64 value;
 };
 
-struct StringLiteral 
-{
+struct StringLiteral {
     BufferString value;
 };
 
-struct VariableDeclaration 
-{
+struct VariableDeclaration {
     BufferString name;
     Expression* value;
 };
 
-struct PropertyDeclaration 
-{
+struct PropertyDeclaration {
     BufferString name;
 };
 
-struct TypeDeclaration
-{
+struct TypeDeclaration {
     BufferString name;
     List* properties; // PropertyDeclarations
     // int64 properties_count;
 };
 
-struct CallExpression 
-{
+struct CallExpression {
     Expression* callee;
     List* args;
 };
 
-struct MemberExpression 
-{
+struct MemberExpression {
     Expression* object;
     Identifier* member;
 };
 
-struct AssignmentExpression 
-{
+struct AssignmentExpression {
     Expression* assignee;
     Expression* value;
 };
 
-struct BinaryExpression 
-{
+struct BinaryExpression {
     char operator[2];
     Expression* left;
     Expression* right;
 };
 
-struct AstNode 
-{
-    union
-    {
+struct AstNode {
+    union {
         BlockStatement block_statement;
         IfStatement ifStatement;
         Identifier identifier;
