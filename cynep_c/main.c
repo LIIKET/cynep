@@ -37,7 +37,7 @@ RuntimeValue Multiply(size_t argc, RuntimeValue* argv){
     RuntimeValue arg1 = argv[0];
     RuntimeValue arg2 = argv[1];
 
-    // printf("NATIVE CALL: %f\n", arg2.number);
+    printf("NATIVE CALL: %f\n", arg2.number);
 
     float64 result = arg1.number * arg2.number;
 
@@ -78,7 +78,7 @@ int main(int argc, char**argv)
 
     // Start execution
     VM virtualMachine;
-    RuntimeValue result = VM_exec(&virtualMachine, global, &codeObject);
+    RuntimeValue result = VM_exec(&virtualMachine, global);
 
     printf("Execution result: %s", RuntimeValue_ToString(result));
 }

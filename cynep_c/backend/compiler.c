@@ -12,22 +12,23 @@ int64       String_Const_Index(CodeObject* co, BufferString* string);
 bool Is_Global_Scope(CodeObject* co);
 
 // Context
-CodeObject** code_objects;
-size_t code_objects_length;
+// CodeObject** code_objects;
+// size_t code_objects_length;
+// FunctionObject* main_fn;
 
-RuntimeValue Create_CodeObjectValue(BufferString name, size_t arity){
+RuntimeValue Create_CodeObjectValue(BufferString name, size_t arity, Global* global){
     RuntimeValue value = Alloc_Code(&name, arity);
     CodeObject* co = &AS_CODE(value);
 
-    code_objects[code_objects_length] = co;
-    code_objects_length++;
+    global->code_objects[global->code_objects_length] = co;
+    global->code_objects_length++;
 
     return value;
 }
 
 CodeObject Compile(AstNode* statement, Global* global){
 
-    code_objects= malloc(sizeof(void*) * 100); // TODO: DANGER! Handle memory! 100 000 000, Crashes if too many constants
+    global->code_objects= malloc(sizeof(void*) * 100); // TODO: DANGER! Handle memory! 100 000 000, Crashes if too many constants
 
     int64 compile_begin = timestamp();
 
@@ -36,8 +37,10 @@ CodeObject Compile(AstNode* statement, Global* global){
     name.length = 4;
 
 
-    RuntimeValue codeValue = Create_CodeObjectValue(name, 0);
-    CodeObject* co = &AS_CODE(codeValue);
+    RuntimeValue codeValue = Create_CodeObjectValue(name, 0, global);
+    CodeObject* co = &AS_CODE(codeValue); // remove
+
+    global->main_fn = co;
 
 
     // TODO: Need a growing array for this
@@ -188,7 +191,7 @@ void Gen(CodeObject* co, AstNode* statement, Global* global){
             BufferString name = functionDeclaration.name;
             size_t arity = functionDeclaration.args->count;
 
-            RuntimeValue coValue = Create_CodeObjectValue(name, arity);
+            RuntimeValue coValue = Create_CodeObjectValue(name, arity, global);
             CodeObject* new_co = &AS_CODE(coValue);
 
             new_co->scope_level = 2;
@@ -257,16 +260,20 @@ void Gen(CodeObject* co, AstNode* statement, Global* global){
             ListNode* current_node = blockStatement.body->first;
             while (current_node != NULL)
             {
-                AstNode* test = ((AstNode*)current_node->value);
+                AstNode* current_astNode = ((AstNode*)current_node->value);
 
                 Gen(co, current_node->value, global);
 
                 // Pop if not last last (last is return value)
-                bool is_local_declaration = 
-                    (((AstNode*)current_node->value)->type == AST_VariableDeclaration && !Is_Global_Scope(co) 
-                    || ((AstNode*)current_node->value)->type == AST_IfStatement);
+                // bool is_local_declaration = 
+                //     (((AstNode*)current_node->value)->type == AST_VariableDeclaration && !Is_Global_Scope(co) 
+                //     || ((AstNode*)current_node->value)->type == AST_IfStatement);
 
-                if(is_local_declaration == false  ){ // && (current_node->next != NULL)
+                // if(is_local_declaration == false ) { // && (current_node->next != NULL
+                //     Emit(co, OP_POP);
+                // }
+
+                if(Is_Global_Scope(co) && current_astNode->type == AST_VariableDeclaration){
                     Emit(co, OP_POP);
                 }
 
@@ -421,18 +428,16 @@ void Gen(CodeObject* co, AstNode* statement, Global* global){
             // Emit function
             Gen(co, (AstNode*)callExpression.callee, global);
 
-            // Valitade arity
-            
-            // TODO: IMMPORTANT! Read back 64 bit. 
+            // TODO: IMPORTANT! Read back 64 bit. 
             uint8_t address = co->code[co->code_last - 8]; // Read back function global address
-            NativeFunctionObject native_fn = AS_NATIVE_FUNCTION(Global_Get(global, address).value);
 
-            if(native_fn.arity != callExpression.args->count){
-                printf("\033[0;31mCompiler: Reference error. Arity mismatch. \033[0m\n");
-                exit(0);
-            }
+            // TODO: IMPORTANT! Valitade arity.
+            // NativeFunctionObject native_fn = AS_NATIVE_FUNCTION(Global_Get(global, address).value);
 
-            //RuntimeValue asd = co->code[co->code_last - 1];
+            // if(native_fn.arity != callExpression.args->count){
+            //     printf("\033[0;31mCompiler: Reference error. Arity mismatch. \033[0m\n");
+            //     exit(0);
+            // }
 
             ListNode* cursor = callExpression.args->first;
 
@@ -564,9 +569,9 @@ char* cmpCodeToString(uint8_t cmpcode){
 void Disassemble(Global* global){
 
 
-    for (size_t i = 0; i < code_objects_length; i++)
+    for (size_t i = 0; i < global->code_objects_length; i++)
     {
-        CodeObject* co = code_objects[i];
+        CodeObject* co = global->code_objects[i];
 
     printf("\n------------------ %s DISASSEMBLY ------------------\n\n", co->name);
 

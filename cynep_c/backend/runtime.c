@@ -1,5 +1,6 @@
 #pragma once
 
+
 typedef enum ValueType ValueType;
 typedef enum ObjectType ObjectType;
 
@@ -12,9 +13,10 @@ typedef struct GlobalVar GlobalVar;
 typedef struct Global Global;
 typedef struct LocalVar LocalVar;
 typedef struct NativeFunctionObject NativeFunctionObject;
-struct FunctionObject FunctionObject;
+typedef struct FunctionObject FunctionObject;
+typedef struct Frame Frame;
 
-RuntimeValue    VM_Eval(VM* vm, CodeObject* co, Global* global);
+RuntimeValue    VM_Eval(VM* vm, Global* global);
 RuntimeValue    VM_Stack_Peek(VM* vm, size_t offset);
 RuntimeValue    VM_Stack_Pop(VM* vm);
 uint8_t         VM_Read_Byte(VM* vm);
@@ -22,28 +24,25 @@ uint8_t         VM_Peek_Byte(VM* vm);
 uint64_t        VM_Read_Address(VM* vm);
 void            VM_Stack_Push(VM* vm, RuntimeValue* value);
 void            VM_Exception(char* msg);
-void VM_DumpStack(VM* vm, uint8_t code);
-char* opcodeToString(uint8_t opcode);
+void            VM_DumpStack(VM* vm, uint8_t code);
+char*           opcodeToString(uint8_t opcode);
 
 #pragma region TYPES
 
-enum ValueType 
-{
+enum ValueType {
     ValueType_Null,
     ValueType_Number,
     ValueType_Boolean,
     ValueType_Object
 };
 
-enum ObjectType 
-{
+enum ObjectType {
     ObjectType_String,
     ObjectType_Code,
     ObjectType_NativeFunction
 };
 
-struct RuntimeValue 
-{
+struct RuntimeValue {
     ValueType type;
     union
     {
@@ -53,34 +52,31 @@ struct RuntimeValue
     };
 };
 
-struct Object 
-{
+struct Object {
     ObjectType objectType;
 };
 
-struct StringObject 
-{
+struct StringObject {
     Object object;
     char* string;
 };
 
-struct NativeFunctionObject
-{
+struct NativeFunctionObject {
     Object object; 
     void* func_ptr;
     char* name;
     size_t arity;
 };
 
-struct CodeObject
-{
+struct CodeObject {
     Object object;
     char* name;
     size_t arity;
 
     uint8_t* code; // Array of opcodes
     size_t code_last;
-    RuntimeValue* constants;
+
+    RuntimeValue* constants; // Array of constants
     uint64_t constants_last;
 
     int8_t scope_level;
@@ -89,41 +85,52 @@ struct CodeObject
     uint64 locals_max;
 };
 
-struct FunctionObject
-{
+struct FunctionObject {
     CodeObject code;
 };
 
-struct GlobalVar 
-{
+struct GlobalVar {
     char* name;
     RuntimeValue value;
 };
 
-struct LocalVar 
-{
+struct LocalVar {
     char* name;
     int8_t scope_level;
     RuntimeValue value;
 };
 
-struct Global 
-{
+struct Global {
     GlobalVar* globals; // Array of global variables
     int64 globals_size;
     int64 globals_max;
+
+    CodeObject** code_objects; // all functions
+    size_t code_objects_length;
+    CodeObject* main_fn; // main function
 };
 
-struct VM 
-{
+struct VM {
     uint8_t* ip; // Instruction pointer
     Global* global;
+
+    CodeObject* fn;
+    RuntimeValue* sp; // Stack pointer
+    RuntimeValue* bp; // Base pointer / Frame pointer
 
     RuntimeValue* stack; // Array of values
     RuntimeValue* stack_start; // First address of stack
     RuntimeValue* stack_end; // Last address of stack
-    RuntimeValue* sp; // Stack pointer
-    RuntimeValue* bp; // Base pointer / Frame pointer
+
+    Frame* callStack;
+    Frame* callStack_end;
+    Frame* csp; // call stack pointer
+};
+
+struct Frame {
+    uint8_t* ra; // return address
+    RuntimeValue* bp; // base pointer of the caller
+    CodeObject* fn; // reference to the running function
 };
 
 #pragma endregion
@@ -137,6 +144,7 @@ struct VM
 #define AS_STRING(value) (*(StringObject*)value.object)
 #define AS_CODE(value) (*(CodeObject*)value.object)
 #define AS_NATIVE_FUNCTION(value) (*(NativeFunctionObject*)value.object)
+#define AS_FUNCTION(value) (*(FunctionObject*)value.object)
 #define AS_NUMBER(value) (*(float64*)value.number)
 #define AS_BOOLEAN(value) (*(bool*)value.boolean)
 
@@ -196,14 +204,14 @@ RuntimeValue Alloc_NativeFunction(void* func, char* name, size_t arity){
     RuntimeValue result;
     result.type = ValueType_Object;
 
-    NativeFunctionObject* stringObject = malloc(sizeof(NativeFunctionObject));
+    NativeFunctionObject* nativeFunctionObject = malloc(sizeof(NativeFunctionObject));
 
-    stringObject->object.objectType = ObjectType_NativeFunction;
-    stringObject->arity = arity;
-    stringObject->func_ptr = func;
-    stringObject->name = name;
+    nativeFunctionObject->object.objectType = ObjectType_NativeFunction;
+    nativeFunctionObject->arity = arity;
+    nativeFunctionObject->func_ptr = func;
+    nativeFunctionObject->name = name;
 
-    result.object = (Object*)stringObject;
+    result.object = (Object*)nativeFunctionObject;
     return result;
 }
 
@@ -263,7 +271,7 @@ RuntimeValue Alloc_Code(BufferString* name, size_t arity){
     co->object.objectType = ObjectType_Code;
     co->name = malloc(name->length * sizeof(char) + 1);
     co->code = malloc(sizeof(uint8_t) * 100000000); // TODO: DANGER! Handle memory! 100 000 000, Crashes if too many instructions
-    co->constants = malloc(sizeof(RuntimeValue*) * 100); // TODO: DANGER! Handle memory! 100 000 000, Crashes if too many constants
+    co->constants = malloc(sizeof(RuntimeValue*) * 100000000); // TODO: DANGER! Handle memory! 100 000 000, Crashes if too many constants
     co->code_last = 0;
     co->constants_last = 0;
     co->scope_level = 0;
@@ -273,7 +281,7 @@ RuntimeValue Alloc_Code(BufferString* name, size_t arity){
     strncpy(co->name, name->start, name->length);
     co->name[name->length] = NULL_CHAR;
 
-    co->locals = malloc(sizeof(LocalVar) * 10); // TODO: DANGER! Handle memory when adding
+    co->locals = malloc(sizeof(LocalVar) * 100000000); // TODO: DANGER! Handle memory when adding
     co->locals_size = 0;
     co->locals_max = 10;
 
@@ -370,6 +378,8 @@ Global* Create_Global(){
     global->globals_max = 10;
     global->globals_size = 0;
 
+    global->code_objects_length = 0;
+
     return global;
 }
 
@@ -454,17 +464,25 @@ LocalVar Local_Get(CodeObject* co, int64 index){
 
 #define STACK_LIMIT 512 // DANGER! TODO: Reduce this when scopes are implemented.
 
-RuntimeValue VM_exec(VM* vm, Global* global, CodeObject* codeObject){
+RuntimeValue VM_exec(VM* vm, Global* global){
     vm->global = global;
+
     vm->stack = malloc(sizeof(RuntimeValue) * STACK_LIMIT);
     vm->stack_start = vm->stack;
     vm->stack_end = vm->stack_start + sizeof(RuntimeValue) * STACK_LIMIT;
+
+    vm->callStack = malloc(sizeof(Frame) * STACK_LIMIT);
+    vm->callStack_end = vm->callStack + sizeof(Frame) * STACK_LIMIT;
     
-    vm->ip = &codeObject->code[0];
+    CodeObject* co = global->main_fn;
+    vm->fn = co;
+    vm->ip = &co->code[0];
     vm->sp = &vm->stack[0];
     vm->bp = &vm->stack[0];
 
-    return VM_Eval(vm, codeObject, global);
+    vm->csp = vm->callStack;
+
+    return VM_Eval(vm, global);
 }
 
 #define BINARY_OP(operation)                    \
@@ -476,7 +494,7 @@ RuntimeValue VM_exec(VM* vm, Global* global, CodeObject* codeObject){
     } while (false)                             \
 
 
-RuntimeValue VM_Eval(VM* vm, CodeObject* co, Global* global){
+RuntimeValue VM_Eval(VM* vm, Global* global){
     int64 t1 = timestamp();
 
     while(true){
@@ -490,13 +508,13 @@ RuntimeValue VM_Eval(VM* vm, CodeObject* co, Global* global){
             case OP_HALT:{
                 int64 t2 = timestamp();
                 printf("Execution time: %d ms\n", t2/1000-t1/1000);
-                return RUNTIME_NULL(); // Hack!!!
-                //return VM_Stack_Pop(vm); 
+                //return RUNTIME_NULL(); // Hack!!!
+                return VM_Stack_Pop(vm); 
             }     
 
             case OP_CONST: {
                 uint64_t constIndex = VM_Read_Address(vm);
-                RuntimeValue constant = co->constants[constIndex];
+                RuntimeValue constant = vm->fn->constants[constIndex];
                 VM_Stack_Push(vm, &constant);
 
                 break;
@@ -630,14 +648,14 @@ RuntimeValue VM_Eval(VM* vm, CodeObject* co, Global* global){
                 uint64_t address = VM_Read_Address(vm);
 
                 if(!condition){
-                    vm->ip = &co->code[address];
+                    vm->ip = &vm->fn->code[address];
                 }
 
                 break;
             }
             case OP_JMP:{
                 uint64_t address = VM_Read_Address(vm);
-                vm->ip = &co->code[address];
+                vm->ip = &vm->fn->code[address];
 
                 break;
             }
@@ -692,10 +710,10 @@ RuntimeValue VM_Eval(VM* vm, CodeObject* co, Global* global){
 
             case OP_CALL:{
                 uint64_t arg_count = VM_Read_Address(vm);
-                RuntimeValue function = VM_Stack_Peek(vm, arg_count);
+                RuntimeValue fnValue = VM_Stack_Peek(vm, arg_count);
 
-                if(function.type == ValueType_Object && function.object->objectType == ObjectType_NativeFunction){
-                    NativeFunctionObject fn = AS_NATIVE_FUNCTION(function);
+                if(fnValue.type == ValueType_Object && fnValue.object->objectType == ObjectType_NativeFunction){
+                    NativeFunctionObject fn = AS_NATIVE_FUNCTION(fnValue);
 
                     RuntimeValue args[arg_count];
 
@@ -711,6 +729,38 @@ RuntimeValue VM_Eval(VM* vm, CodeObject* co, Global* global){
                     
                     VM_Stack_Push(vm, &res); // Push the result
                 }
+                else{
+                    CodeObject* fn = (CodeObject*)(fnValue.object);
+
+                    // save execution context, restored on OP_RETURN
+                    Frame fr = {
+                        .bp = vm->bp,
+                        .fn = vm->fn,
+                        .ra = vm->ip
+                    };
+                    *vm->csp = fr;
+                    vm->csp++;
+
+                    // Set function on vm
+                    vm->fn = fn;
+
+                    // set base pointer (frame) to the call
+                    vm->bp = vm->sp - arg_count - 1;
+
+                    // Jump to the function code
+                    vm->ip = &fn->code[0];
+                }
+
+                break;
+            }
+
+            case OP_RETURN: {
+                // restore frame
+                vm->csp--;
+                vm->ip = vm->csp->ra;
+                vm->bp = vm->csp->bp;
+                vm->fn = vm->csp->fn;
+                
 
                 break;
             }
