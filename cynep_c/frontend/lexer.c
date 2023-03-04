@@ -5,8 +5,7 @@ typedef struct Token Token;
 typedef struct BufferString BufferString; 
 typedef enum ParseState ParseState;
 
-enum TokenType 
-{
+enum TokenType {
     // Literals
     Token_Number,
     Token_String,
@@ -39,7 +38,9 @@ enum TokenType
 
 enum ParseState {
     ParseState_Start,
-    ParseState_Symbol
+    ParseState_Symbol,
+    ParseState_Number,
+    ParseState_String
 };
 
 struct BufferString {
@@ -57,7 +58,73 @@ struct Token {
     };
 };
 
-unsigned long hash_function(char* str)
+#define ALPHA \
+         'A': \
+    case 'B': \
+    case 'C': \
+    case 'D': \
+    case 'E': \
+    case 'F': \
+    case 'G': \
+    case 'H': \
+    case 'I': \
+    case 'J': \
+    case 'K': \
+    case 'L': \
+    case 'M': \
+    case 'N': \
+    case 'O': \
+    case 'P': \
+    case 'Q': \
+    case 'R': \
+    case 'S': \
+    case 'T': \
+    case 'U': \
+    case 'V': \
+    case 'W': \
+    case 'X': \
+    case 'Y': \
+    case 'Z': \
+    case 'a': \
+    case 'b': \
+    case 'c': \
+    case 'd': \
+    case 'e': \
+    case 'f': \
+    case 'g': \
+    case 'h': \
+    case 'i': \
+    case 'j': \
+    case 'k': \
+    case 'l': \
+    case 'm': \
+    case 'n': \
+    case 'o': \
+    case 'p': \
+    case 'q': \
+    case 'r': \
+    case 's': \
+    case 't': \
+    case 'u': \
+    case 'v': \
+    case 'w': \
+    case 'x': \
+    case 'y': \
+    case 'z'
+
+#define DIGIT \
+         '1': \
+    case '2': \
+    case '3': \
+    case '4': \
+    case '5': \
+    case '6': \
+    case '7': \
+    case '8': \
+    case '9': \
+    case '0'
+
+unsigned long hash_function(char* str) 
 {
     unsigned long i = 0;
 
@@ -114,18 +181,16 @@ Token* lexer_tokenize(TextFile* file) {
     size_t tokens_max = file->length / 2;
 
     MemPool* pool = MemPool_Make(sizeof(Token) * tokens_max);
-    size_t iterator = 0;
-
-
+    size_t pos = 0;
 
     ParseState state = ParseState_Start;
 
     char* buff_start = 0;
     size_t buff_length = 0;
 
-    while(file_buffer[iterator] != NULL_CHAR) {
-        char* current = &file_buffer[iterator];
-        char* lookahead = &file_buffer[iterator + 1];
+    while(file_buffer[pos] != NULL_CHAR) {
+        char* current = &file_buffer[pos];
+        char* lookahead = &file_buffer[pos + 1];
 
         char current_as_string[2];
         current_as_string[0] = *current;
@@ -155,34 +220,28 @@ Token* lexer_tokenize(TextFile* file) {
                     case ';': { *NextTokenMem(pool) = Token_Operator_Create(Token_Semicolon, current_as_string); break; }
                     case '.': { *NextTokenMem(pool) = Token_Operator_Create(Token_Dot, current_as_string); break; }
                     case '!': {   
-                        if(*lookahead == '=')
-                        {
+                        if(*lookahead == '=')                        {
                             *NextTokenMem(pool) = Token_Operator_Create(Token_ComparisonOperator, current_and_lookahead_as_string);  
-                            iterator++;
-                        }
-                        else{
+                            pos++;
+                        } else{
                             // Some kind of negation operator
                         }
-                        
                         break;
                     }
                     case '>': {   
-                        if(*lookahead == '=') {
+                        if(*lookahead == '=') { 
                             *NextTokenMem(pool) = Token_Operator_Create(Token_ComparisonOperator, current_and_lookahead_as_string);                  
-                            iterator++;
-                        }
-                        else {
+                            pos++;
+                        } else {
                             *NextTokenMem(pool) = Token_Operator_Create(Token_ComparisonOperator, current_as_string); 
                         }
-                        
                         break;
                     }
                     case '<': {   
                         if(*lookahead == '=') {
                             *NextTokenMem(pool) = Token_Operator_Create(Token_ComparisonOperator, current_and_lookahead_as_string);  
-                            iterator++;
-                        }
-                        else {
+                            pos++;
+                        } else {
                             *NextTokenMem(pool) = Token_Operator_Create(Token_ComparisonOperator, current_as_string); 
                         }
                         
@@ -191,60 +250,32 @@ Token* lexer_tokenize(TextFile* file) {
                     case '=': {   
                         if(*lookahead == '=') {
                             *NextTokenMem(pool) = Token_Operator_Create(Token_ComparisonOperator, current_and_lookahead_as_string);  
-                            iterator++;
-                        }
-                        else {
+                            pos++;
+                        } else {
                             *NextTokenMem(pool) = Token_Operator_Create(Token_Assignment, current_as_string); 
                         }
-                        
                         break;
                     }
-                    case '"': {             
-                        // String literals
-
-                        char* start = current + 1;
-                        size_t start_pos = iterator + 1;
-                        size_t length = 0;
-
-                        // Count the length of the string
-                        for (; file_buffer[start_pos + length] != '"'; length++) {} 
-
-                        iterator += length + 1;
-
-                        *NextTokenMem(pool) = Token_Create(Token_String, start, length); 
-
+                    case '"': {       
+                        state = ParseState_String;
+                        buff_start = current + 1;
+                        buff_length = 0;
                         break;
+                    }
+                    case ALPHA: {
+                        state = ParseState_Symbol;
+                        buff_start = current;
+                        buff_length = 0;
+                        continue;
+                    }
+                    case DIGIT: {
+                        state = ParseState_Number;
+                        buff_start = current;
+                        buff_length = 0;
+                        continue;
                     }
                     default: {
-                        if (isdigit(*current)) {
-                            // Numbers
-
-                            char number[50] = "";
-                            size_t start_pos = iterator;
-                            size_t length = 0;
-
-                            while (isdigit(file_buffer[start_pos + length]))
-                            {
-                                strncat(number, &file_buffer[start_pos + length], 1);
-                                length++;
-                            }
-
-                            // Reduce by one cause we also increment at the end of loop
-                            iterator += length - 1;
-
-                            // atof for float. Slow as fuck. Just parse int and cast to float?
-                            float64 parsed_number = atoi(number); 
-
-                            *NextTokenMem(pool) = Token_Number_Create(Token_Number, parsed_number); 
-                        }
-                        else if (isalpha(*current)) {
-                            // Reserved keywords and identifiers
-                            state = ParseState_Symbol;
-                            buff_start = current;
-                            buff_length = 1;
-                            break;;
-                        }
-                        else if (Is_Skippable(*current)) {
+                        if (Is_Skippable(*current)) {
                             break;
                         }
                         else {   
@@ -253,50 +284,84 @@ Token* lexer_tokenize(TextFile* file) {
                         }
                     }
                 }
-
-
                 break;
             }
 
-            case ParseState_Symbol: {
-                if (isalpha(*current)) {
-                    // Reserved keywords and identifiers
-                    buff_length++;
+            case ParseState_String: {
+                switch (*current)
+                {
+                    case '"': {
+                        state = ParseState_Start;
+                        *NextTokenMem(pool) = Token_Create(Token_String, buff_start, buff_length); 
+                        break;
+                    }
+                    default: {
+                        buff_length++;
+                        break;
+                    }
                 }
-                else { //if (Is_Skippable(*current)) 
-                    state = ParseState_Start;
+                break;
+            }
 
-                    // uint32_t type = hash_function("type");
-                    // uint32_t var = hash_function("var");
-                    // uint32_t if1 = hash_function("if");
-                    // uint32_t else1 = hash_function("else");
-                    // uint32_t assd = hash_function("while");
-                    // uint32_t asddd = hash_function("func");
+            case ParseState_Symbol: { 
+                switch (*current)
+                {
+                    case ALPHA: {
+                        buff_length++;
+                        break;
+                    }  
+                    default: {
+                        state = ParseState_Start;
 
-                    if(buff_length == 4 && strncmp(buff_start, "type", buff_length) == 0) {
-                        *NextTokenMem(pool) = Token_Create(Token_Type, buff_start, buff_length); 
-                    }
-                    else if(buff_length == 3 && strncmp(buff_start, "var", buff_length) == 0) {
-                        *NextTokenMem(pool) = Token_Create(Token_Let, buff_start, buff_length); 
-                    }
-                    else if(buff_length == 2 && strncmp(buff_start, "if", buff_length) == 0) {
-                        *NextTokenMem(pool) = Token_Create(Token_If, buff_start, buff_length); 
-                    }
-                    else if(buff_length == 4 && strncmp(buff_start, "else", buff_length) == 0) {
-                        *NextTokenMem(pool) = Token_Create(Token_Else, buff_start, buff_length); 
-                    }
-                    else if(buff_length == 5 && strncmp(buff_start, "while", buff_length) == 0) {
-                        *NextTokenMem(pool) = Token_Create(Token_While, buff_start, buff_length); 
-                    }
-                    else if(buff_length == 4 && strncmp(buff_start, "func", buff_length) == 0) {
-                        *NextTokenMem(pool) = Token_Create(Token_Func, buff_start, buff_length); 
-                    }
-                    else {
-                        *NextTokenMem(pool) = Token_Create(Token_Identifier, buff_start, buff_length); 
-                    }
+                        if(buff_length == 4 && strncmp(buff_start, "type", buff_length) == 0) {
+                            *NextTokenMem(pool) = Token_Create(Token_Type, buff_start, buff_length); 
+                        }
+                        else if(buff_length == 3 && strncmp(buff_start, "var", buff_length) == 0) {
+                            *NextTokenMem(pool) = Token_Create(Token_Let, buff_start, buff_length); 
+                        }
+                        else if(buff_length == 2 && strncmp(buff_start, "if", buff_length) == 0) {
+                            *NextTokenMem(pool) = Token_Create(Token_If, buff_start, buff_length);
+                        }
+                        else if(buff_length == 4 && strncmp(buff_start, "else", buff_length) == 0) {
+                            *NextTokenMem(pool) = Token_Create(Token_Else, buff_start, buff_length); 
+                        }
+                        else if(buff_length == 5 && strncmp(buff_start, "while", buff_length) == 0) {
+                            *NextTokenMem(pool) = Token_Create(Token_While, buff_start, buff_length); 
+                        }
+                        else if(buff_length == 4 && strncmp(buff_start, "func", buff_length) == 0) {
+                            *NextTokenMem(pool) = Token_Create(Token_Func, buff_start, buff_length); 
+                        }
+                        else {
+                            *NextTokenMem(pool) = Token_Create(Token_Identifier, buff_start, buff_length); 
+                        }
 
-                    continue;
+                        continue;
+                    }
                 }
+                break;
+            }
+
+            case ParseState_Number: {
+                switch (*current)
+                {
+                    case DIGIT: {
+                        buff_length++;
+                        break;
+                    }
+                    default: {
+                        state = ParseState_Start;
+
+                        char asd[buff_length];
+                        strncpy(asd, buff_start, buff_length);
+                        asd[buff_length] = NULL_CHAR;
+                        float64 parsed_number = atoi(asd); 
+
+                        *NextTokenMem(pool) = Token_Number_Create(Token_Number, parsed_number);
+
+                        continue;
+                    }
+                }
+                break;
             }
 
             default: 
@@ -305,7 +370,7 @@ Token* lexer_tokenize(TextFile* file) {
             }
         }
 
-        iterator++;
+        pos++;
     }  
 
     *NextTokenMem(pool) = Token_Create(Token_EOF, NULL, 0);  
