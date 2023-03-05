@@ -21,6 +21,8 @@
 #include "backend/runtime.c"
 #include "backend/compiler.c"
 
+
+
 bool arg(int argc, char**argv, char* search){
     for (uint64 i = 1; i < argc; i++)
     {
