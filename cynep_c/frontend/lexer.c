@@ -43,22 +43,14 @@ enum ParseState {
     ParseState_String
 };
 
-struct BufferString {
-    char* start;
-    size_t length;
-};
-
 struct Token {
     TokenType type;
     union
-    {
-        
-        BufferString string_value;
+    {   
+        char* string;
         char operator_value[2];
-        float64 number_value;
-        
-    };
-    char* string;
+        float64 number_value;   
+    };  
 };
 
 #define ALPHA \
@@ -140,8 +132,7 @@ unsigned long hash_function(char* str)
 Token Token_Create(TokenType type, char* start, size_t length, Arena* arena) {
     Token token;
     token.type = type;
-    token.string_value.length = length;
-    token.string_value.start = start;
+
 
     token.string = arena_alloc(arena, sizeof(char) * (length + 1));
     strncpy(token.string, start, length);

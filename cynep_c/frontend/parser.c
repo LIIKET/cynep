@@ -136,7 +136,7 @@ FunctionDeclaration* Parse_FunctionDeclaration(Arena* arena)
             }
 
             Token identifierTok = ConsumeExpect(Token_Identifier, "func argument should be an identifier.");
-            Identifier* identifier = Create_Identifier(arena_alloc(arena, sizeof(AstNode)), identifierTok.string_value);
+            Identifier* identifier = Create_Identifier(arena_alloc(arena, sizeof(AstNode)), identifierTok.string);
             ListNode* node = listNode_create(arena_alloc(arena, sizeof(AstNode)), identifier);
             list_append(args, node);
         } while((Current().type == Token_Comma));
@@ -149,7 +149,7 @@ FunctionDeclaration* Parse_FunctionDeclaration(Arena* arena)
         body = Parse_BlockStatement(arena);
     }
 
-    return Create_FunctionDeclaration(arena_alloc(arena, sizeof(AstNode)), func_name.string_value, args, body);
+    return Create_FunctionDeclaration(arena_alloc(arena, sizeof(AstNode)), func_name.string, args, body);
 }
 
 IfStatement* Parse_IfStatement(Arena* arena)
@@ -226,7 +226,7 @@ VariableDeclaration* Parse_VariableDeclaration(Arena* arena)
     if(Current().type == Token_Semicolon){
         Consume();
 
-        return Create_VariableDeclaration(arena_alloc(arena, sizeof(AstNode)), identifier.string_value, NULL);
+        return Create_VariableDeclaration(arena_alloc(arena, sizeof(AstNode)), identifier.string, NULL);
     }
     else{
         ConsumeExpect(Token_Assignment, "Identifier in var declaration should be followed by an equals token.");
@@ -234,7 +234,7 @@ VariableDeclaration* Parse_VariableDeclaration(Arena* arena)
         
         ConsumeExpect(Token_Semicolon, "Variable declaration must end with semicolon.");
         
-        return Create_VariableDeclaration(arena_alloc(arena, sizeof(AstNode)), identifier.string_value, expression);
+        return Create_VariableDeclaration(arena_alloc(arena, sizeof(AstNode)), identifier.string, expression);
     }
 }
 
@@ -245,13 +245,13 @@ TypeDeclaration* Parse_TypeDeclaration(Arena* arena)
     ConsumeExpect(Token_Assignment, "Error in type declaration");
     ConsumeExpect(Token_OpenBrace, "Error in type declaration");
 
-    TypeDeclaration* type_declaration = Create_TypeDeclaration(arena_alloc(arena, sizeof(AstNode)), arena_alloc(arena, sizeof(List)), identifier.string_value);
+    TypeDeclaration* type_declaration = Create_TypeDeclaration(arena_alloc(arena, sizeof(AstNode)), arena_alloc(arena, sizeof(List)), identifier.string);
 
     while(!End_Of_File() && Current().type != Token_CloseBrace){
         Token property_identifier = ConsumeExpect(Token_Identifier, "Error in type declaration");
         ConsumeExpect(Token_Semicolon, "Error in type declaration");
 
-        PropertyDeclaration* property_declaration = Create_PropertyDeclaration(arena_alloc(arena, sizeof(AstNode)), property_identifier.string_value);
+        PropertyDeclaration* property_declaration = Create_PropertyDeclaration(arena_alloc(arena, sizeof(AstNode)), property_identifier.string);
 
         ListNode* node = listNode_create(arena_alloc(arena, sizeof(AstNode)), property_declaration);
         list_append(type_declaration->properties, node);
@@ -448,7 +448,7 @@ Expression* Parse_PrimaryExpression(Arena* arena)
     switch (token.type) { 
         case Token_Identifier:
             {
-                return (Expression*)Create_Identifier(arena_alloc(arena, sizeof(AstNode)), Consume().string_value);
+                return (Expression*)Create_Identifier(arena_alloc(arena, sizeof(AstNode)), Consume().string);
             }
         case Token_Number:
             {
@@ -456,7 +456,7 @@ Expression* Parse_PrimaryExpression(Arena* arena)
             }
         case Token_String:
             {     
-                return (Expression*)Create_StringLiteral(arena_alloc(arena, sizeof(AstNode)), Consume().string_value); //atoi(Consume().value)
+                return (Expression*)Create_StringLiteral(arena_alloc(arena, sizeof(AstNode)), Consume().string); //atoi(Consume().value)
             }
         case Token_OpenParen:
             {
@@ -469,7 +469,7 @@ Expression* Parse_PrimaryExpression(Arena* arena)
         default:
             {
                 printf("Unexpected token in parser.");
-                 printf("Unexpected token in parser: \"%s\"\n", Current().string_value);
+                 printf("Unexpected token in parser: \"%s\"\n", Current().string);
                 exit(0);
             }
     }

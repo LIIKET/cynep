@@ -8,14 +8,14 @@ void        Emit(CodeObject* co, uint8_t code);
 void        Write_Address_At_Offset(CodeObject* co, size_t offset, uint64_t value);
 // void     Write_Byte_At_Offset(CodeObject* co, size_t offset, uint8_t value);
 void        Emit64(CodeObject* co, uint64_t value);
-int64       String_Const_Index(CodeObject* co, BufferString* string);
+int64       String_Const_Index(CodeObject* co, char* string);
 bool        Is_Global_Scope(CodeObject* co);
 
-RuntimeValue Create_CodeObjectValue(BufferString name, size_t arity, Global* global){
-    RuntimeValue value = Alloc_Code(&name, arity);
+RuntimeValue Create_CodeObjectValue(char* name, size_t arity, Global* global){
+    RuntimeValue value = Alloc_Code(name, arity);
     CodeObject* co = &AS_CODE(value);
 
-    if(name.length == 4 && name.start[0] == 'm'){
+    if(name[0] == 'm'){
         global->main_fn = co;
     }
 
@@ -100,7 +100,7 @@ void Gen(CodeObject* co, AstNode* statement, Global* global){
             GlobalVar typeinfovar = Global_Get(global, typeinfo_index);
             TypeInfoObject type_info = AS_TYPEINFO(typeinfovar.value);
 
-            int64 member_index = Member_GetIndexBufferString(&type_info, &member.name);
+            int64 member_index = Member_GetIndex(&type_info, member.name);
 
             Emit(co, OP_GET_MEMBER);
             Emit64(co, member_index);
@@ -213,17 +213,13 @@ void Gen(CodeObject* co, AstNode* statement, Global* global){
             size_t end_branch_address = Get_Offset(co);
             Write_Address_At_Offset(co, loop_end_jmp_address, end_branch_address);
 
-            // Hack to have something to pop when loop ends in BlockStatement
-            // Emit(co, OP_CONST);
-            // Emit64(co, 0);
-
             break;
         }
 
         case AST_FunctionDeclaration: {
             FunctionDeclaration functionDeclaration = *(FunctionDeclaration*)statement;
 
-            BufferString name = functionDeclaration.name;
+            char* name = functionDeclaration.name;
             size_t arity = functionDeclaration.args->count;
 
             RuntimeValue coValue = Create_CodeObjectValue(name, arity, global);
@@ -237,7 +233,7 @@ void Gen(CodeObject* co, AstNode* statement, Global* global){
             while (current_node != NULL)
             {
                 Identifier* identifier = ((Identifier*)current_node->value);
-                Local_Define(new_co, &identifier->name);
+                Local_Define(new_co, identifier->name);
                 current_node = current_node->next;
             }
             new_co->scope_level = 0;
@@ -316,7 +312,7 @@ void Gen(CodeObject* co, AstNode* statement, Global* global){
         case AST_StringLiteral: {
             StringLiteral expression = *(StringLiteral*)statement;
 
-            size_t index = String_Const_Index(co, &expression.value);
+            size_t index = String_Const_Index(co, expression.value);
 
             Emit(co, OP_CONST);
             Emit64(co, index);
@@ -328,14 +324,14 @@ void Gen(CodeObject* co, AstNode* statement, Global* global){
             Identifier identifier = *(Identifier*)statement;
 
             // Handle scoped variables
-            int64 local_index = Local_GetIndexBufferString(co, &identifier.name);
+            int64 local_index = Local_GetIndex(co, identifier.name);
             if(local_index != -1){
                 Emit(co, OP_GET_LOCAL);
                 Emit64(co, local_index);
             }
             else{
                 // No local, try global
-                int64 global_index = Global_GetIndexBufferString(global, &identifier.name);
+                int64 global_index = Global_GetIndex(global, identifier.name);
 
                 if(global_index == -1){
                     printf("\033[0;31mCompiler: Reference error \033[0m\n");
@@ -353,7 +349,7 @@ void Gen(CodeObject* co, AstNode* statement, Global* global){
 
             if(Is_Global_Scope(co))
             { 
-                Global_Define(global, &variableDeclaration.name); // This should return index directly
+                Global_Define(global, variableDeclaration.name); // This should return index directly
                 // int64 index = Global_GetIndexBufferString(global, &variableDeclaration.name);
 
                 // Emit(co, OP_SET_GLOBAL);
@@ -370,8 +366,8 @@ void Gen(CodeObject* co, AstNode* statement, Global* global){
                     Emit64(co, global_index);
                 }
 
-                Local_Define(co, &variableDeclaration.name); // This should return index directly
-                int64 index = Local_GetIndexBufferString(co, &variableDeclaration.name);
+                Local_Define(co, variableDeclaration.name); // This should return index directly
+                int64 index = Local_GetIndex(co, variableDeclaration.name);
 
                 Emit(co, OP_SET_LOCAL);
                 Emit64(co, index);
@@ -388,14 +384,14 @@ void Gen(CodeObject* co, AstNode* statement, Global* global){
             Gen(co, (AstNode*)assignmentExpression.value, global);
 
             // 1. Locals
-            int64 local_index = Local_GetIndexBufferString(co, &identifier->name);
+            int64 local_index = Local_GetIndex(co, identifier->name);
             if(local_index != -1){
                 Emit(co, OP_SET_LOCAL);
                 Emit64(co, local_index);
             }
             else{
                 // 2. Globals
-                int64 global_index = Global_GetIndexBufferString(global, &identifier->name);
+                int64 global_index = Global_GetIndex(global, identifier->name);
 
                 if(global_index == -1){
                     printf("\033[0;31mCompiler: Reference error \033[0m\n");
@@ -434,7 +430,7 @@ void Gen(CodeObject* co, AstNode* statement, Global* global){
                 cursor = cursor->next;
             }
 
-                        // Emit function
+            // Emit function
             Gen(co, (AstNode*)callExpression.callee, global);
 
             Emit(co, OP_CALL);
@@ -472,7 +468,7 @@ size_t Numeric_Const_Index(CodeObject* co, float64 value){
     return co->constants_last++; // Increments after return
 }
 
-int64 String_Const_Index(CodeObject* co, BufferString* string){
+int64 String_Const_Index(CodeObject* co, char* string){
     for (size_t i = 0; i < co->constants_last + 1; i++)
     {
         if(co->constants[i].type != ValueType_Object){
@@ -480,15 +476,14 @@ int64 String_Const_Index(CodeObject* co, BufferString* string){
         }
 
         StringObject* strObj = (StringObject*)co->constants[i].object;
-        uint64 current_length = strlen(strObj->string);
+        // uint64 current_length = strlen(strObj->string);
 
-        if(current_length == string->length && strncmp(string->start, strObj->string, string->length) == 0){
+        if(strcmp(string, strObj->string) == 0){
             return i;
         }
     }
 
-    co->constants[co->constants_last] = Alloc_String_From_BufferString(string);
-
+    co->constants[co->constants_last] = Alloc_String(string);
     return co->constants_last++; // Increments after return
 }
 

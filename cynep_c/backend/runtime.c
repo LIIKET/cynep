@@ -31,7 +31,7 @@ void            VM_Exception(char* msg);
 void            VM_DumpStack(VM* vm, uint8_t code);
 char*           opcodeToString(uint8_t opcode);
 int64 Member_GetIndex(TypeInfoObject* instance, char* name);
-int64 Member_GetIndexBufferString(TypeInfoObject* instance, BufferString* name);
+
 
 #pragma region TYPES
 
@@ -233,9 +233,11 @@ RuntimeValue Alloc_String(char* value){
     StringObject* stringObject = malloc(sizeof(StringObject));
 
     stringObject->object.objectType = ObjectType_String;
-    stringObject->string = value;
+    stringObject->string = malloc(strlen(value) * sizeof(char) + 1);
     result.object = (Object*)stringObject;
     
+    strcpy(stringObject->string, value);
+
     return result;
 }
 
@@ -281,43 +283,19 @@ RuntimeValue Alloc_String_Combine(StringObject* one, StringObject* two){
     return result;
 }
 
-RuntimeValue Alloc_String_From_BufferString(BufferString* value){
-    RuntimeValue result;
-    result.type = ValueType_Object;
-
-    // Put string and string object in same memory block for performance
-    void* memory = malloc(sizeof(StringObject) + (value->length * sizeof(char)) + 1);
-    char* string = memory + sizeof(StringObject);
-
-    strncpy(string, value->start, value->length);
-
-    string[value->length] = NULL_CHAR;
-
-    StringObject* stringObject = memory;
-    stringObject->object.objectType = ObjectType_String;
-    stringObject->string = string;
-
-    result.object = (Object*)stringObject;
-
-    return result;
-}
-
-RuntimeValue Alloc_Code(BufferString* name, size_t arity){
+RuntimeValue Alloc_Code(char* name, size_t arity){
     RuntimeValue result;
     result.type = ValueType_Object;
 
     CodeObject* co = malloc(sizeof(CodeObject));
     co->object.objectType = ObjectType_Code;
-    co->name = malloc(name->length * sizeof(char) + 1);
+    co->name = name;
     co->code = malloc(sizeof(uint8_t) * 100000000); // TODO: DANGER! Handle memory! 100 000 000, Crashes if too many instructions
     co->constants = malloc(sizeof(RuntimeValue*) * 100000000); // TODO: DANGER! Handle memory! 100 000 000, Crashes if too many constants
     co->code_last = 0;
     co->constants_last = 0;
     co->scope_level = 0;
     co->arity = arity;
-
-    strncpy(co->name, name->start, name->length);
-    co->name[name->length] = NULL_CHAR;
 
     co->locals = malloc(sizeof(LocalVar) * 100000000); // TODO: DANGER! Handle memory when adding
     co->locals_size = 0;
@@ -336,10 +314,7 @@ RuntimeValue Alloc_TypeInfo(TypeDeclaration* typeDeclaration){
     co->object.objectType = ObjectType_TypeInfo;
     co->members = malloc(typeDeclaration->properties->count * sizeof(MemberInfo));
     co->members_length = typeDeclaration->properties->count;
-    co->name= malloc(sizeof(char) * typeDeclaration->name.length + 1);
-
-    strncpy(co->name, typeDeclaration->name.start, typeDeclaration->name.length);
-    co->name[typeDeclaration->name.length] = NULL_CHAR;
+    co->name= typeDeclaration->name;
 
     ListNode* cursor = typeDeclaration->properties->first;
     int i = 0;
@@ -347,10 +322,7 @@ RuntimeValue Alloc_TypeInfo(TypeDeclaration* typeDeclaration){
         PropertyDeclaration* prop = (PropertyDeclaration*)cursor->value;
         MemberInfo* member = &co->members[i];
 
-        member->name = malloc(sizeof(char) * (prop->name.length + 1));
-
-        strncpy(member->name, prop->name.start, prop->name.length);
-        member->name[prop->name.length] = NULL_CHAR;
+        member->name = prop->name;
 
         i++;
         cursor = cursor->next;
@@ -367,15 +339,9 @@ RuntimeValue Alloc_TypeInstance(TypeInfoObject* typeInfo){
 
     TypeInstanceObject* co = malloc(sizeof(TypeInstanceObject));
 
-
     co->object.objectType = ObjectType_TypeInstance;
     co->members = malloc(typeInfo->members_length * sizeof(MemberVar));
     co->members_length = typeInfo->members_length;
-
-    // co->name= malloc(sizeof(char) * name->length + 1);
-
-    // strncpy(co->name, name->start, name->length);
-    // co->name[name->length] = NULL_CHAR;
 
     for (size_t i = 0; i < typeInfo->members_length; i++)
     {
@@ -417,19 +383,6 @@ int64 Global_GetIndex(Global* global, char* name){
     return -1;
 }
 
-int64 Global_GetIndexBufferString(Global* global, BufferString* name){
-    if(global->globals_size > 1){
-        for(int64 i = global->globals_size - 1; i >= 0; i--){
-            uint64 current_length = strlen(global->globals[i].name);
-            if(current_length == name->length && strncmp(name->start, global->globals[i].name, name->length) == 0){
-                return i;
-            }
-        }
-    }
-
-    return -1;
-}
-
 int64 Member_GetIndex(TypeInfoObject* instance, char* name){
     if(instance->members_length > 1){
         for(int64 i = instance->members_length - 1; i >= 0; i--){
@@ -446,30 +399,16 @@ MemberVar Member_Get(TypeInstanceObject* co, int64 index){
     return co->members[index];
 }
 
-int64 Member_GetIndexBufferString(TypeInfoObject* instance, BufferString* name){
-    if(instance->members_length > 1){
-        for(int64 i = instance->members_length - 1; i >= 0; i--){
-            uint64 current_length = strlen(instance->members[i].name);
-            if(current_length == name->length && strncmp(name->start, instance->members[i].name, name->length) == 0){
-                return i;
-            }
-        }
-    }
-
-    return -1;
-}
-
-void Global_Define(Global* global, BufferString* name){
-    int64 index = Global_GetIndexBufferString(global, name);
+void Global_Define(Global* global, char* name){
+    int64 index = Global_GetIndex(global, name);
 
     if(index != -1){
         return;
     }
 
     GlobalVar* var = &global->globals[global->globals_size++];
-    var->name = malloc(sizeof(char) * name->length + 1);
-    strncpy(var->name, name->start, name->length);
-    var->name[name->length] = NULL_CHAR;
+    var->name = name;
+
     var->value = NUMBER(0); // TODO: Set to null
 }
 
@@ -514,15 +453,11 @@ Global* Create_Global(){
 
 #pragma region LOCALS
 
-int64 Local_GetIndexBufferString(CodeObject* co, BufferString* name){
+int64 Local_GetIndex(CodeObject* co, char* name){
     // TODO: Take the one with the closest scope level.
     if(co->locals_size > 0){
         for(int64 i = co->locals_size - 1; i >= 0; i--){
-            uint64 current_length = strlen(co->locals[i].name);
-
-            if(current_length == name->length 
-            && strncmp(name->start, co->locals[i].name, name->length) == 0
-            && co->locals[i].scope_level == co->scope_level){
+            if(strcmp(name, co->locals[i].name) == 0 && co->locals[i].scope_level == co->scope_level){
                 return i;
             }
         }
@@ -531,8 +466,12 @@ int64 Local_GetIndexBufferString(CodeObject* co, BufferString* name){
     return -1;
 }
 
-void Local_Define(CodeObject* co, BufferString* name){
-    int64 index = Local_GetIndexBufferString(co, name);
+void Local_Define(CodeObject* co, char* name){
+    if(strcmp("si", name) == 0){
+        int asd = 0;
+    }
+
+    int64 index = Local_GetIndex(co, name);
 
     if(index != -1){
         return;
@@ -540,9 +479,8 @@ void Local_Define(CodeObject* co, BufferString* name){
 
     LocalVar* var = &co->locals[co->locals_size++];
     var->scope_level = co->scope_level;
-    var->name = malloc(sizeof(char) * name->length + 1);
-    strncpy(var->name, name->start, name->length);
-    var->name[name->length] = NULL_CHAR;
+    var->name = name;
+
     var->value = RUNTIME_NULL(); // TODO: Set to null
 }
 

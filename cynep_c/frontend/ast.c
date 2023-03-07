@@ -59,13 +59,13 @@ struct WhileStatement {
 };
 
 struct FunctionDeclaration {
-    BufferString name;
+    char* name;
     List* args; // List of identifiers, TODO: Replace with arg struct containing type info?
     BlockStatement* body;
 };
 
 struct Identifier {
-    BufferString name;
+    char* name;
 };
 
 struct NumericLiteral {
@@ -73,20 +73,20 @@ struct NumericLiteral {
 };
 
 struct StringLiteral {
-    BufferString value;
+    char* value;
 };
 
 struct VariableDeclaration {
-    BufferString name;
+    char* name;
     Expression* value;
 };
 
 struct PropertyDeclaration {
-    BufferString name;
+    char* name;
 };
 
 struct TypeDeclaration {
-    BufferString name;
+    char* name;
     List* properties; // PropertyDeclarations
 };
 
@@ -147,7 +147,7 @@ BlockStatement* Create_BlockStatement(AstNode* node, List* body) {
     return (BlockStatement*)node;
 }
 
-FunctionDeclaration* Create_FunctionDeclaration(AstNode* memory, BufferString name, List* args, BlockStatement* block) {
+FunctionDeclaration* Create_FunctionDeclaration(AstNode* memory, char* name, List* args, BlockStatement* block) {
     memory->type = AST_FunctionDeclaration;
     memory->function_declaration.args = args;
     memory->function_declaration.body = block;
@@ -156,31 +156,28 @@ FunctionDeclaration* Create_FunctionDeclaration(AstNode* memory, BufferString na
     return (FunctionDeclaration*)memory;
 }
 
-VariableDeclaration* Create_VariableDeclaration(AstNode* memory, BufferString name, Expression* value) {
+VariableDeclaration* Create_VariableDeclaration(AstNode* memory, char* name, Expression* value) {
     memory->type = AST_VariableDeclaration;
     memory->variable_declaration.value = value;
 
-    memory->variable_declaration.name.start = name.start;
-    memory->variable_declaration.name.length = name.length;
+    memory->variable_declaration.name = name;
 
     return (VariableDeclaration*)memory;
 }
 
-TypeDeclaration* Create_TypeDeclaration(AstNode* memory, List* member_list_memory, BufferString name) {
+TypeDeclaration* Create_TypeDeclaration(AstNode* memory, List* member_list_memory, char* name) {
     memory->type = AST_TypeDefinition;
     memory->type_declaration.properties = list_create(member_list_memory);
 
-    memory->type_declaration.name.start = name.start;
-    memory->type_declaration.name.length = name.length;
+    memory->type_declaration.name = name;
 
     return (TypeDeclaration*)memory;
 }
 
-PropertyDeclaration* Create_PropertyDeclaration(AstNode* memory, BufferString name) {
+PropertyDeclaration* Create_PropertyDeclaration(AstNode* memory, char* name) {
     memory->type = AST_PropertyDeclaration;
 
-    memory->property_declaration.name.start = name.start;
-    memory->property_declaration.name.length = name.length;
+    memory->property_declaration.name = name;
 
     return (PropertyDeclaration*)memory;
 }
@@ -246,10 +243,9 @@ WhileStatement* Create_WhileStatement(AstNode* memory, ComparisonExpression* tes
     return (WhileStatement*)memory;
 }
 
-Identifier* Create_Identifier(AstNode* memory, BufferString name) {
+Identifier* Create_Identifier(AstNode* memory, char* name) {
     memory->type = AST_Identifier;
-    memory->identifier.name.start = name.start;
-    memory->identifier.name.length = name.length;
+    memory->identifier.name = name;
 
     return (Identifier*)memory;
 }
@@ -261,7 +257,7 @@ NumericLiteral* Create_NumericLiteral(AstNode* memory, int64 value) {
     return (NumericLiteral*)memory;
 }
 
-StringLiteral* Create_StringLiteral(AstNode* memory, BufferString value) {
+StringLiteral* Create_StringLiteral(AstNode* memory, char* value) {
     memory->type = AST_StringLiteral;
     memory->string_literal.value = value;
 
@@ -451,17 +447,17 @@ void astNode_print(AstNode* node)
         }
         case AST_VariableDeclaration:
         {
-            printf("VariableDeclaration: %.*s", node->variable_declaration.name.length, node->variable_declaration.name.start);
+            printf("VariableDeclaration: %s", node->variable_declaration.name);
             break;
         }
         case AST_TypeDefinition:
         {
-            printf("TypeDeclaration: %.*s", node->type_declaration.name.length, node->type_declaration.name.start);
+            printf("TypeDeclaration: %s", node->type_declaration.name);
             break;            
         }
         case AST_PropertyDeclaration:
         {
-            printf("PropertyDeclaration: %.*s", node->property_declaration.name.length, node->property_declaration.name.start);
+            printf("PropertyDeclaration: %s", node->property_declaration.name);
             break;
         }
         case AST_AssignmentExpression:
@@ -502,7 +498,7 @@ void astNode_print(AstNode* node)
         case AST_FunctionDeclaration:
         {
             FunctionDeclaration* item = (FunctionDeclaration*)node;
-            printf("FunctionDeclaration: %.*s", item->name.length, item->name.start);
+            printf("FunctionDeclaration: %s", item->name);
             break;    
         }
         case AST_NumericLiteral:
@@ -514,12 +510,12 @@ void astNode_print(AstNode* node)
         case AST_StringLiteral:
         {
             StringLiteral* item = (StringLiteral*)node;
-            printf("StringLiteral: %.*s", item->value.length, item->value.start);
+            printf("StringLiteral: %s", item->value);
             break;    
         }
         case AST_Identifier:
         {
-            printf("Identifier: %.*s", node->identifier.name.length, node->identifier.name.start); 
+            printf("Identifier: %s", node->identifier.name); 
             break;  
         }
         default:

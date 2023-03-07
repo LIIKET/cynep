@@ -1,6 +1,5 @@
 TODO:
 
-- Faster file read!
 - Eliminate all inner looping in lexer. Think state machine.
 - Build constants array in lexer. We could then scrap BufferString struct and rely on NULL termination.
 - Eliminate ALL branching in runtime! Replace with more opcodes.
