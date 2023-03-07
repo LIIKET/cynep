@@ -52,10 +52,13 @@ struct Token {
     TokenType type;
     union
     {
+        
         BufferString string_value;
         char operator_value[2];
         float64 number_value;
+        
     };
+    char* string;
 };
 
 #define ALPHA \
@@ -134,11 +137,15 @@ unsigned long hash_function(char* str)
     return i % 50000;
 }
 
-Token Token_Create(TokenType type, char* start, size_t length) {
+Token Token_Create(TokenType type, char* start, size_t length, Arena* arena) {
     Token token;
     token.type = type;
     token.string_value.length = length;
     token.string_value.start = start;
+
+    token.string = arena_alloc(arena, sizeof(char) * (length + 1));
+    strncpy(token.string, start, length);
+    token.string[length] = NULL_CHAR;
 
     return token;
 }
@@ -154,8 +161,6 @@ Token Token_Number_Create(TokenType type, float64 value) {
 Token Token_Operator_Create(TokenType type, char operator[2]) {
     Token token;
     token.type = type;
-    token.string_value.length = 0;
-    token.string_value.start = NULL;
     strcpy(token.operator_value, operator);
 
     return token;
@@ -179,6 +184,8 @@ Token* lexer_tokenize(TextFile* file) {
     // Just allocate as if every character is a token?
     // Kind of wasteful but then we would never have to reallocate.
     size_t tokens_max = file->length / 2;
+
+    Arena* arena = arena_create(500 * sizeof(Token));
 
     MemPool* pool = MemPool_Make(sizeof(Token) * tokens_max);
     size_t pos = 0;
@@ -292,7 +299,7 @@ Token* lexer_tokenize(TextFile* file) {
                 {
                     case '"': {
                         state = ParseState_Start;
-                        *NextTokenMem(pool) = Token_Create(Token_String, buff_start, buff_length); 
+                        *NextTokenMem(pool) = Token_Create(Token_String, buff_start, buff_length, arena); 
                         break;
                     }
                     default: {
@@ -314,25 +321,25 @@ Token* lexer_tokenize(TextFile* file) {
                         state = ParseState_Start;
 
                         if(buff_length == 4 && strncmp(buff_start, "type", buff_length) == 0) {
-                            *NextTokenMem(pool) = Token_Create(Token_Type, buff_start, buff_length); 
+                            *NextTokenMem(pool) = Token_Create(Token_Type, buff_start, buff_length, arena); 
                         }
                         else if(buff_length == 3 && strncmp(buff_start, "var", buff_length) == 0) {
-                            *NextTokenMem(pool) = Token_Create(Token_Let, buff_start, buff_length); 
+                            *NextTokenMem(pool) = Token_Create(Token_Let, buff_start, buff_length, arena); 
                         }
                         else if(buff_length == 2 && strncmp(buff_start, "if", buff_length) == 0) {
-                            *NextTokenMem(pool) = Token_Create(Token_If, buff_start, buff_length);
+                            *NextTokenMem(pool) = Token_Create(Token_If, buff_start, buff_length, arena);
                         }
                         else if(buff_length == 4 && strncmp(buff_start, "else", buff_length) == 0) {
-                            *NextTokenMem(pool) = Token_Create(Token_Else, buff_start, buff_length); 
+                            *NextTokenMem(pool) = Token_Create(Token_Else, buff_start, buff_length, arena); 
                         }
                         else if(buff_length == 5 && strncmp(buff_start, "while", buff_length) == 0) {
-                            *NextTokenMem(pool) = Token_Create(Token_While, buff_start, buff_length); 
+                            *NextTokenMem(pool) = Token_Create(Token_While, buff_start, buff_length, arena); 
                         }
                         else if(buff_length == 4 && strncmp(buff_start, "func", buff_length) == 0) {
-                            *NextTokenMem(pool) = Token_Create(Token_Func, buff_start, buff_length); 
+                            *NextTokenMem(pool) = Token_Create(Token_Func, buff_start, buff_length, arena); 
                         }
                         else {
-                            *NextTokenMem(pool) = Token_Create(Token_Identifier, buff_start, buff_length); 
+                            *NextTokenMem(pool) = Token_Create(Token_Identifier, buff_start, buff_length, arena); 
                         }
 
                         continue;
@@ -373,7 +380,7 @@ Token* lexer_tokenize(TextFile* file) {
         pos++;
     }  
 
-    *NextTokenMem(pool) = Token_Create(Token_EOF, NULL, 0);  
+    *NextTokenMem(pool) = Token_Create(Token_EOF, NULL, 0, arena);  
 
     // for (size_t i = 0; i < token_count; i++)
     // {
