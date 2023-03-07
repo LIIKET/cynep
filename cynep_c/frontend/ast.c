@@ -88,7 +88,6 @@ struct PropertyDeclaration {
 struct TypeDeclaration {
     BufferString name;
     List* properties; // PropertyDeclarations
-    // int64 properties_count;
 };
 
 struct CallExpression {

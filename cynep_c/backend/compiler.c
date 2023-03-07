@@ -1,24 +1,23 @@
 #pragma once
 
-CodeObject  Compile(AstNode* statement, Global* global);
+void  Compile(AstNode* statement, Global* global);
 size_t      Get_Offset(CodeObject* co);
 size_t      Numeric_Const_Index(CodeObject* co, float64 value);
 void        Gen(CodeObject* co, AstNode* statement, Global* global);
 void        Emit(CodeObject* co, uint8_t code);
 void        Write_Address_At_Offset(CodeObject* co, size_t offset, uint64_t value);
-// void        Write_Byte_At_Offset(CodeObject* co, size_t offset, uint8_t value);
+// void     Write_Byte_At_Offset(CodeObject* co, size_t offset, uint8_t value);
 void        Emit64(CodeObject* co, uint64_t value);
 int64       String_Const_Index(CodeObject* co, BufferString* string);
-bool Is_Global_Scope(CodeObject* co);
-
-// Context
-// CodeObject** code_objects;
-// size_t code_objects_length;
-// FunctionObject* main_fn;
+bool        Is_Global_Scope(CodeObject* co);
 
 RuntimeValue Create_CodeObjectValue(BufferString name, size_t arity, Global* global){
     RuntimeValue value = Alloc_Code(&name, arity);
     CodeObject* co = &AS_CODE(value);
+
+    if(name.length == 4 && name.start[0] == 'm'){
+        global->main_fn = co;
+    }
 
     global->code_objects[global->code_objects_length] = co;
     global->code_objects_length++;
@@ -26,40 +25,20 @@ RuntimeValue Create_CodeObjectValue(BufferString name, size_t arity, Global* glo
     return value;
 }
 
-CodeObject Compile(AstNode* statement, Global* global){
+void Compile(AstNode* statement, Global* global){
 
-    global->code_objects= malloc(sizeof(void*) * 100); // TODO: DANGER! Handle memory! 100 000 000, Crashes if too many constants
+    global->code_objects= malloc(sizeof(void*) * 100); // TODO: DANGER! Handle memory! Crashes if too many functions
 
     int64 compile_begin = timestamp();
 
-    BufferString name;
-    name.start = "main";
-    name.length = 4;
+    Global_Add(global, "null", RUNTIME_NULL());
+    Global_Add(global, "true", BOOLEAN(true));
+    Global_Add(global, "false", BOOLEAN(false));
 
-
-    RuntimeValue codeValue = Create_CodeObjectValue(name, 0, global);
-    CodeObject* co = &AS_CODE(codeValue); // remove
-
-    global->main_fn = co;
-
-
-    // TODO: Need a growing array for this
-
-
-    // Setup null, true and false consts. Compiler assumes this index order!
-    co->constants[co->constants_last++] = RUNTIME_NULL();
-    co->constants[co->constants_last++] = BOOLEAN(true);
-    co->constants[co->constants_last++] = BOOLEAN(false);
-
-
-    Gen(co, statement, global);
-
-    Emit(co, OP_HALT);
+    Gen(NULL, statement, global);
 
     int64 compile_end = timestamp();
     printf("Compiling: %d ms\n", compile_end/1000-compile_begin/1000);
-
-    return *co;
 }
 
 void Gen(CodeObject* co, AstNode* statement, Global* global){
@@ -83,6 +62,49 @@ void Gen(CodeObject* co, AstNode* statement, Global* global){
             else if(expression.operator[0] == '/'){
                 Emit(co, OP_DIV);
             }
+            break;
+        }
+
+        case AST_MemberExpression: {
+            MemberExpression expression = *(MemberExpression*)statement;
+
+            // Emit object first
+            // Borde köra Gen på object sen
+            // Identifier object = *(Identifier*)expression.object;
+            // int64 local_index = Local_GetIndexBufferString(co, &object.name);
+
+            // Emit(co, OP_GET_LOCAL);
+            // Emit64(co, local_index);
+
+            Gen(co, (AstNode*)expression.object, global);
+
+            // Läs tillbaka senast emittade och kolla typ?
+            // TODO: IMPORTANT! Read back 64 bit. 
+            uint8_t address = co->code[co->code_last - 8]; // Read back address
+            uint8_t code = co->code[co->code_last - 9]; // läs tillbaka opcode
+
+            if(code == OP_GET_LOCAL){
+                LocalVar assd = Local_Get(co, address); // Check type and use when getting typeinfo
+                // Maybe it should have a typeinfo pointer on it
+                int asd = 0;
+            }
+            else{
+                printf("\033[0;31mCompiler: Implement global in member expression \033[0m\n");
+                exit(0);
+            }
+
+            // Then member, borde alltid vara identifier?
+            Identifier member = *(Identifier*)expression.member;
+
+            int64 typeinfo_index = Global_GetIndex(global, "player");
+            GlobalVar typeinfovar = Global_Get(global, typeinfo_index);
+            TypeInfoObject type_info = AS_TYPEINFO(typeinfovar.value);
+
+            int64 member_index = Member_GetIndexBufferString(&type_info, &member.name);
+
+            Emit(co, OP_GET_MEMBER);
+            Emit64(co, member_index);
+
             break;
         }
         
@@ -123,6 +145,19 @@ void Gen(CodeObject* co, AstNode* statement, Global* global){
                 Emit(co, OP_CMP);
                 Emit(co, OP_CMP_NE);
             }
+            break;
+        }
+
+        case AST_TypeDefinition: {
+            TypeDeclaration typeDeclaration = *(TypeDeclaration*)statement;
+
+            RuntimeValue typeInfoValue = Alloc_TypeInfo(&typeDeclaration);
+            TypeInfoObject* typeInfo = (TypeInfoObject*)typeInfoValue.object;
+
+            MemberInfo asd = typeInfo->members[0];
+
+            Global_Add(global, typeInfo->name, typeInfoValue);
+
             break;
         }
 
@@ -179,8 +214,8 @@ void Gen(CodeObject* co, AstNode* statement, Global* global){
             Write_Address_At_Offset(co, loop_end_jmp_address, end_branch_address);
 
             // Hack to have something to pop when loop ends in BlockStatement
-            Emit(co, OP_CONST);
-            Emit64(co, 0);
+            // Emit(co, OP_CONST);
+            // Emit64(co, 0);
 
             break;
         }
@@ -193,15 +228,10 @@ void Gen(CodeObject* co, AstNode* statement, Global* global){
 
             RuntimeValue coValue = Create_CodeObjectValue(name, arity, global);
             CodeObject* new_co = &AS_CODE(coValue);
-
-            new_co->scope_level = 2;
-
-            // Store function as constant in previous
-            co->constants[co->constants_last++] = coValue;
-
-            // add local so function can call itself
-            Local_Define(new_co, &name);
             
+            Global_Add(global, new_co->name, coValue);
+
+            new_co->scope_level = 1;
 
             ListNode* current_node = functionDeclaration.args->first;
             while (current_node != NULL)
@@ -210,42 +240,19 @@ void Gen(CodeObject* co, AstNode* statement, Global* global){
                 Local_Define(new_co, &identifier->name);
                 current_node = current_node->next;
             }
-            new_co->scope_level = 1;
+            new_co->scope_level = 0;
 
             // Generate body
-            AstNode* asd = (AstNode*)functionDeclaration.body;
-            Gen(new_co, asd, global);
+            AstNode* functionBody = (AstNode*)functionDeclaration.body;
+            Gen(new_co, functionBody, global);
 
             // Here goes cleanup if we add functions without block as body
 
-
-            Emit(new_co, OP_RETURN);
-
-            // Add function as constant
-             co->constants[co->constants_last++] = coValue;
-
-            // // Emit code for this new constant
-            Emit(co, OP_CONST);
-            Emit64(co, co->constants_last-1);
-
-
-            // Emit variable set
-
-            if(Is_Global_Scope(co)) // If global scope
-            { 
-                Global_Define(global, &functionDeclaration.name); // This should return index directly
-                int64 index = Global_GetIndexBufferString(global, &functionDeclaration.name);
-
-                Emit(co, OP_SET_GLOBAL);
-                Emit64(co, index);
+            if(new_co == global->main_fn){
+                Emit(new_co, OP_HALT);
             }
-            else // Handle scoped variables
-            {
-                Local_Define(co, &functionDeclaration.name); // This should return index directly
-                int64 index = Local_GetIndexBufferString(co, &functionDeclaration.name);
-
-                Emit(co, OP_SET_LOCAL);
-                Emit64(co, index);
+            else{
+                Emit(new_co, OP_RETURN);
             }
 
             break;
@@ -255,7 +262,9 @@ void Gen(CodeObject* co, AstNode* statement, Global* global){
             BlockStatement blockStatement = *(BlockStatement*)statement;
 
             // Scope begin
-            co->scope_level++;
+            if(!Is_Global_Scope(co)){
+                co->scope_level++;
+            }
 
             ListNode* current_node = blockStatement.body->first;
             while (current_node != NULL)
@@ -264,16 +273,7 @@ void Gen(CodeObject* co, AstNode* statement, Global* global){
 
                 Gen(co, current_node->value, global);
 
-                // Pop if not last last (last is return value)
-                // bool is_local_declaration = 
-                //     (((AstNode*)current_node->value)->type == AST_VariableDeclaration && !Is_Global_Scope(co) 
-                //     || ((AstNode*)current_node->value)->type == AST_IfStatement);
-
-                // if(is_local_declaration == false ) { // && (current_node->next != NULL
-                //     Emit(co, OP_POP);
-                // }
-
-                if(Is_Global_Scope(co) && current_astNode->type == AST_VariableDeclaration){
+                if(current_astNode->type == AST_AssignmentExpression){
                     Emit(co, OP_POP);
                 }
 
@@ -283,7 +283,7 @@ void Gen(CodeObject* co, AstNode* statement, Global* global){
             // Scope exit
             if(!Is_Global_Scope(co)){
 
-                // We need to pop all vars declared in this scope, from the stack.
+                // We need to pop all vars declared in this scope from the stack.
                 uint64 vars_declared_in_scope_count = 0;
                 while (co->locals_size > 0 && co->locals[co->locals_size - 1].scope_level == co->scope_level)
                 {
@@ -327,62 +327,49 @@ void Gen(CodeObject* co, AstNode* statement, Global* global){
         case AST_Identifier: {
             Identifier identifier = *(Identifier*)statement;
 
-            if(strncmp(identifier.name.start,"true", identifier.name.length) == 0){
-                Emit(co, OP_CONST);
-                Emit64(co, 1);
-            }
-            else if(strncmp(identifier.name.start,"false", identifier.name.length) == 0){
-                Emit(co, OP_CONST);
-                Emit64(co, 2);
-            }
-            else if(strncmp(identifier.name.start,"null", identifier.name.length) == 0){
-                Emit(co, OP_CONST);
-                Emit64(co, 0);
+            // Handle scoped variables
+            int64 local_index = Local_GetIndexBufferString(co, &identifier.name);
+            if(local_index != -1){
+                Emit(co, OP_GET_LOCAL);
+                Emit64(co, local_index);
             }
             else{
+                // No local, try global
+                int64 global_index = Global_GetIndexBufferString(global, &identifier.name);
 
-                // Handle scoped variables
-                int64 local_index = Local_GetIndexBufferString(co, &identifier.name);
-                if(local_index != -1){
-                    Emit(co, OP_GET_LOCAL);
-                    Emit64(co, local_index);
+                if(global_index == -1){
+                    printf("\033[0;31mCompiler: Reference error \033[0m\n");
+                    exit(0);
                 }
-                else{
-                    int64 global_index = Global_GetIndexBufferString(global, &identifier.name);
 
-                    if(global_index == -1){
-                        printf("\033[0;31mCompiler: Reference error \033[0m\n");
-                        exit(0);
-                    }
-
-                    Emit(co, OP_GET_GLOBAL);
-                    Emit64(co, global_index);
-                }
+                Emit(co, OP_GET_GLOBAL);
+                Emit64(co, global_index);
             }
             break;
         }
 
         case AST_VariableDeclaration: {
             VariableDeclaration variableDeclaration = *(VariableDeclaration*)statement;
-            if(variableDeclaration.value != NULL){
-                Gen(co, (AstNode*)variableDeclaration.value, global);
-            }
-            else{
-                // Emit null if no value
-                Emit(co, OP_CONST);
-                Emit64(co, 0);
-            }
 
-            if(co->scope_level == 1) // If global scope
+            if(Is_Global_Scope(co))
             { 
                 Global_Define(global, &variableDeclaration.name); // This should return index directly
-                int64 index = Global_GetIndexBufferString(global, &variableDeclaration.name);
+                // int64 index = Global_GetIndexBufferString(global, &variableDeclaration.name);
 
-                Emit(co, OP_SET_GLOBAL);
-                Emit64(co, index);
+                // Emit(co, OP_SET_GLOBAL);
+                // Emit64(co, index);
             }
-            else // Handle scoped variables
-            {
+            else{
+                if(variableDeclaration.value != NULL){
+                    Gen(co, (AstNode*)variableDeclaration.value, global);
+                }
+                else{
+                    // Emit null if no value
+                    int64 global_index = Global_GetIndex(global, "null");
+                    Emit(co, OP_GET_GLOBAL);
+                    Emit64(co, global_index);
+                }
+
                 Local_Define(co, &variableDeclaration.name); // This should return index directly
                 int64 index = Local_GetIndexBufferString(co, &variableDeclaration.name);
 
@@ -425,27 +412,30 @@ void Gen(CodeObject* co, AstNode* statement, Global* global){
         case AST_CallExpression:{
             CallExpression callExpression = *(CallExpression*)statement; 
 
-            // Emit function
-            Gen(co, (AstNode*)callExpression.callee, global);
+
 
             // TODO: IMPORTANT! Read back 64 bit. 
             uint8_t address = co->code[co->code_last - 8]; // Read back function global address
 
-            // TODO: IMPORTANT! Valitade arity.
-            // NativeFunctionObject native_fn = AS_NATIVE_FUNCTION(Global_Get(global, address).value);
+            // TODO: IMPORTANT! Valitade arity for native and user defined functions. Example (native):
+            /*
+            NativeFunctionObject native_fn = AS_NATIVE_FUNCTION(Global_Get(global, address).value);
 
-            // if(native_fn.arity != callExpression.args->count){
-            //     printf("\033[0;31mCompiler: Reference error. Arity mismatch. \033[0m\n");
-            //     exit(0);
-            // }
+            if(native_fn.arity != callExpression.args->count){
+                printf("\033[0;31mCompiler: Reference error. Arity mismatch. \033[0m\n");
+                exit(0);
+            }
+            */
 
             ListNode* cursor = callExpression.args->first;
-
             while (cursor != NULL)
             {
                 Gen(co, (AstNode*)cursor->value, global);
                 cursor = cursor->next;
             }
+
+                        // Emit function
+            Gen(co, (AstNode*)callExpression.callee, global);
 
             Emit(co, OP_CALL);
             Emit64(co, callExpression.args->count);
@@ -463,7 +453,7 @@ void Gen(CodeObject* co, AstNode* statement, Global* global){
 }
 
 bool Is_Global_Scope(CodeObject* co){
-    return co->scope_level == 1;
+    return co == NULL;
 }
 
 size_t Numeric_Const_Index(CodeObject* co, float64 value){
@@ -547,6 +537,7 @@ char* opcodeToString(uint8_t opcode){
         case OP_SET_LOCAL: return "SET_LOCAL";
         case OP_SCOPE_EXIT: return "SCOPE_EXIT";
         case OP_RETURN: return "RETURN";
+        case OP_GET_MEMBER: return "GET_MEMBER";
         default: {
             return "NOT IMPLEMENTED";
         }
@@ -591,6 +582,12 @@ size_t offset = 0;
         printf("%-20s", opcode_string);
 
         if(opcode == OP_CONST){
+            printf("0x%04X", args);
+            printf(" (%s)", RuntimeValue_ToString(co->constants[args]));
+            offset += 8;
+        }
+
+        if(opcode == OP_GET_MEMBER){
             printf("0x%04X", args);
             printf(" (%s)", RuntimeValue_ToString(co->constants[args]));
             offset += 8;

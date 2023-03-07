@@ -12,8 +12,12 @@ typedef struct CodeObject CodeObject;
 typedef struct GlobalVar GlobalVar;
 typedef struct Global Global;
 typedef struct LocalVar LocalVar;
+typedef struct TypeInstanceObject TypeInstanceObject;
+typedef struct MemberVar MemberVar;
 typedef struct NativeFunctionObject NativeFunctionObject;
 typedef struct FunctionObject FunctionObject;
+typedef struct TypeInfoObject TypeInfoObject;
+typedef struct MemberInfo MemberInfo;
 typedef struct Frame Frame;
 
 RuntimeValue    VM_Eval(VM* vm, Global* global);
@@ -26,6 +30,8 @@ void            VM_Stack_Push(VM* vm, RuntimeValue* value);
 void            VM_Exception(char* msg);
 void            VM_DumpStack(VM* vm, uint8_t code);
 char*           opcodeToString(uint8_t opcode);
+int64 Member_GetIndex(TypeInfoObject* instance, char* name);
+int64 Member_GetIndexBufferString(TypeInfoObject* instance, BufferString* name);
 
 #pragma region TYPES
 
@@ -39,7 +45,9 @@ enum ValueType {
 enum ObjectType {
     ObjectType_String,
     ObjectType_Code,
-    ObjectType_NativeFunction
+    ObjectType_NativeFunction,
+    ObjectType_TypeInfo,
+    ObjectType_TypeInstance
 };
 
 struct RuntimeValue {
@@ -87,6 +95,29 @@ struct CodeObject {
 
 struct FunctionObject {
     CodeObject code;
+};
+
+struct TypeInfoObject {
+    Object object;
+    MemberInfo* members;
+    size_t members_length;
+    char* name;
+};
+
+struct MemberInfo {
+    char* name;
+};
+
+struct TypeInstanceObject {
+    Object object;
+    MemberVar* members;
+    size_t members_length;
+    // char* name;
+};
+
+struct MemberVar {
+    char* name;
+    RuntimeValue value;
 };
 
 struct GlobalVar {
@@ -144,6 +175,8 @@ struct Frame {
 #define AS_STRING(value) (*(StringObject*)value.object)
 #define AS_CODE(value) (*(CodeObject*)value.object)
 #define AS_NATIVE_FUNCTION(value) (*(NativeFunctionObject*)value.object)
+#define AS_TYPEINFO(value) (*(TypeInfoObject*)value.object)
+#define AS_TYPEINSTANCE(value) (*(TypeInstanceObject*)value.object)
 #define AS_FUNCTION(value) (*(FunctionObject*)value.object)
 #define AS_NUMBER(value) (*(float64*)value.number)
 #define AS_BOOLEAN(value) (*(bool*)value.boolean)
@@ -167,8 +200,6 @@ char* RuntimeValue_ToString(RuntimeValue value){
     }
     if(value.type == ValueType_Object && value.object->objectType == ObjectType_Code){
         CodeObject code = AS_CODE(value);
-        //char* buf = malloc(sizeof(char) * buff_size);
-        //strncpy(buf, code.name, code.name_length);
         return code.name;
     }
     if(value.type == ValueType_Object && value.object->objectType == ObjectType_String){
@@ -178,10 +209,18 @@ char* RuntimeValue_ToString(RuntimeValue value){
         return buf;
     }
     if(value.type == ValueType_Object && value.object->objectType == ObjectType_NativeFunction){
-        // StringObject str = AS_STRING(value);
-        // char* buf = malloc(sizeof(char) * buff_size);
-        // strcpy(buf, str.string);
         return "(Native function)";
+    }
+    if(value.type == ValueType_Object && value.object->objectType == ObjectType_TypeInfo){
+        TypeInfoObject typeInfo = AS_TYPEINFO(value);
+        return typeInfo.name;
+    }
+    if(value.type == ValueType_Object && value.object->objectType == ObjectType_TypeInstance){
+        TypeInstanceObject typeInfo = AS_TYPEINSTANCE(value);
+        // char* buf = malloc(sizeof(char) * buff_size);
+        // gcvt(typeInfo.members[0].value.number, 6, buf);
+        // return buf;
+        return "(Type instance)";
     }
 
     return "VM: ToString not implemented";
@@ -277,7 +316,6 @@ RuntimeValue Alloc_Code(BufferString* name, size_t arity){
     co->scope_level = 0;
     co->arity = arity;
 
-
     strncpy(co->name, name->start, name->length);
     co->name[name->length] = NULL_CHAR;
 
@@ -285,6 +323,66 @@ RuntimeValue Alloc_Code(BufferString* name, size_t arity){
     co->locals_size = 0;
     co->locals_max = 10;
 
+    result.object = (Object*)co;
+    
+    return result;
+}
+
+RuntimeValue Alloc_TypeInfo(TypeDeclaration* typeDeclaration){
+    RuntimeValue result;
+    result.type = ValueType_Object;
+
+    TypeInfoObject* co = malloc(sizeof(TypeInfoObject));
+    co->object.objectType = ObjectType_TypeInfo;
+    co->members = malloc(typeDeclaration->properties->count * sizeof(MemberInfo));
+    co->members_length = typeDeclaration->properties->count;
+    co->name= malloc(sizeof(char) * typeDeclaration->name.length + 1);
+
+    strncpy(co->name, typeDeclaration->name.start, typeDeclaration->name.length);
+    co->name[typeDeclaration->name.length] = NULL_CHAR;
+
+    ListNode* cursor = typeDeclaration->properties->first;
+    int i = 0;
+    while(cursor != NULL){
+        PropertyDeclaration* prop = (PropertyDeclaration*)cursor->value;
+        MemberInfo* member = &co->members[i];
+
+        member->name = malloc(sizeof(char) * (prop->name.length + 1));
+
+        strncpy(member->name, prop->name.start, prop->name.length);
+        member->name[prop->name.length] = NULL_CHAR;
+
+        i++;
+        cursor = cursor->next;
+    }
+
+    result.object = (Object*)co;
+    
+    return result;
+}
+
+RuntimeValue Alloc_TypeInstance(TypeInfoObject* typeInfo){
+    RuntimeValue result;
+    result.type = ValueType_Object;
+
+    TypeInstanceObject* co = malloc(sizeof(TypeInstanceObject));
+
+
+    co->object.objectType = ObjectType_TypeInstance;
+    co->members = malloc(typeInfo->members_length * sizeof(MemberVar));
+    co->members_length = typeInfo->members_length;
+
+    // co->name= malloc(sizeof(char) * name->length + 1);
+
+    // strncpy(co->name, name->start, name->length);
+    // co->name[name->length] = NULL_CHAR;
+
+    for (size_t i = 0; i < typeInfo->members_length; i++)
+    {
+        co->members[i].name = typeInfo->members[i].name;
+        co->members[i].value = NUMBER(789);
+    }
+    
     result.object = (Object*)co;
     
     return result;
@@ -324,6 +422,35 @@ int64 Global_GetIndexBufferString(Global* global, BufferString* name){
         for(int64 i = global->globals_size - 1; i >= 0; i--){
             uint64 current_length = strlen(global->globals[i].name);
             if(current_length == name->length && strncmp(name->start, global->globals[i].name, name->length) == 0){
+                return i;
+            }
+        }
+    }
+
+    return -1;
+}
+
+int64 Member_GetIndex(TypeInfoObject* instance, char* name){
+    if(instance->members_length > 1){
+        for(int64 i = instance->members_length - 1; i >= 0; i--){
+            if(strcmp(instance->members[i].name, name) == 0){
+                return i;
+            }
+        }
+    }
+
+    return -1;
+}
+
+MemberVar Member_Get(TypeInstanceObject* co, int64 index){
+    return co->members[index];
+}
+
+int64 Member_GetIndexBufferString(TypeInfoObject* instance, BufferString* name){
+    if(instance->members_length > 1){
+        for(int64 i = instance->members_length - 1; i >= 0; i--){
+            uint64 current_length = strlen(instance->members[i].name);
+            if(current_length == name->length && strncmp(name->start, instance->members[i].name, name->length) == 0){
                 return i;
             }
         }
@@ -388,6 +515,7 @@ Global* Create_Global(){
 #pragma region LOCALS
 
 int64 Local_GetIndexBufferString(CodeObject* co, BufferString* name){
+    // TODO: Take the one with the closest scope level.
     if(co->locals_size > 0){
         for(int64 i = co->locals_size - 1; i >= 0; i--){
             uint64 current_length = strlen(co->locals[i].name);
@@ -454,6 +582,7 @@ LocalVar Local_Get(CodeObject* co, int64 index){
 #define OP_SCOPE_EXIT       0x0E
 #define OP_CALL             0x0F
 #define OP_RETURN           0x10
+#define OP_GET_MEMBER       0x11
 
 #define OP_CMP_GT           0x01
 #define OP_CMP_LT           0x02
@@ -695,6 +824,18 @@ RuntimeValue VM_Eval(VM* vm, Global* global){
                 break;
             }
 
+            case OP_GET_MEMBER: {
+                RuntimeValue instanceVal = VM_Stack_Pop(vm);
+                TypeInstanceObject instance = AS_TYPEINSTANCE(instanceVal);
+                int64 memberIndex = VM_Read_Address(vm);
+
+                RuntimeValue memberValue = Member_Get(&instance, memberIndex).value;
+                VM_Stack_Push(vm, &memberValue);
+                int iasd = 0;
+
+                break;
+            }
+
             case OP_SCOPE_EXIT:{
                 uint64 count = VM_Read_Address(vm);
 
@@ -710,7 +851,7 @@ RuntimeValue VM_Eval(VM* vm, Global* global){
 
             case OP_CALL:{
                 uint64_t arg_count = VM_Read_Address(vm);
-                RuntimeValue fnValue = VM_Stack_Peek(vm, arg_count);
+                RuntimeValue fnValue = VM_Stack_Pop(vm);
 
                 if(fnValue.type == ValueType_Object && fnValue.object->objectType == ObjectType_NativeFunction){
                     NativeFunctionObject fn = AS_NATIVE_FUNCTION(fnValue);
@@ -721,8 +862,6 @@ RuntimeValue VM_Eval(VM* vm, Global* global){
                     {
                         args[i] = VM_Stack_Pop(vm);
                     }
-
-                    VM_Stack_Pop(vm); // Pop the function
 
                     RuntimeValue (*fun_ptr)() = fn.func_ptr; // Function pointer
                     RuntimeValue res = (*fun_ptr)(arg_count, &args); // Invoke
@@ -745,7 +884,7 @@ RuntimeValue VM_Eval(VM* vm, Global* global){
                     vm->fn = fn;
 
                     // set base pointer (frame) to the call
-                    vm->bp = vm->sp - arg_count - 1;
+                    vm->bp = vm->sp - arg_count;
 
                     // Jump to the function code
                     vm->ip = &fn->code[0];

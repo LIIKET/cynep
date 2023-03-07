@@ -46,6 +46,15 @@ RuntimeValue Multiply(size_t argc, RuntimeValue* argv){
     return NUMBER(result);
 }
 
+RuntimeValue Alloc(size_t argc, RuntimeValue* argv){
+
+    RuntimeValue arg1 = argv[0];
+    TypeInfoObject* asd = (TypeInfoObject*)arg1.object;
+    RuntimeValue instance = Alloc_TypeInstance(asd);
+
+    return instance;
+}
+
 int main(int argc, char**argv) 
 {
     bool show_ast = arg(argc, argv, "-ast");
@@ -63,11 +72,12 @@ int main(int argc, char**argv)
     Global* global = Create_Global();
     Global_Add(global, "VERSION", NUMBER(0.1));
     Global_AddNativeFunction(global, "multiply", &Multiply, 2);
+    Global_AddNativeFunction(global, "alloc", &Alloc, 1);
 
 
 
     // Compile
-    CodeObject codeObject = Compile((AstNode*)program, global);
+    Compile((AstNode*)program, global);
 
     int64 total_end = timestamp();
     printf("Total: %d ms\n", total_end/1000-total_begin/1000);
