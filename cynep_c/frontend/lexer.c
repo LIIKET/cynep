@@ -19,6 +19,7 @@ enum TokenType {
     Token_Else,
     Token_While,
     Token_Func,
+    Token_Return,
 
     // Operators
     Token_ComparisonOperator,
@@ -328,6 +329,9 @@ Token* lexer_tokenize(TextFile* file) {
                         }
                         else if(buff_length == 4 && strncmp(buff_start, "func", buff_length) == 0) {
                             *NextTokenMem(pool) = Token_Create(Token_Func, buff_start, buff_length, arena); 
+                        }
+                        else if(buff_length == 6 && strncmp(buff_start, "return", buff_length) == 0) {
+                            *NextTokenMem(pool) = Token_Create(Token_Return, buff_start, buff_length, arena); 
                         }
                         else {
                             *NextTokenMem(pool) = Token_Create(Token_Identifier, buff_start, buff_length, arena); 

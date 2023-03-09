@@ -10,6 +10,8 @@ void        Write_Address_At_Offset(CodeObject* co, size_t offset, uint64_t valu
 void        Emit64(CodeObject* co, uint64_t value);
 int64       String_Const_Index(CodeObject* co, char* string);
 bool        Is_Global_Scope(CodeObject* co);
+size_t locals_in_scope(CodeObject* co);
+void emit_return(CodeObject* co, Global* global);
 
 RuntimeValue Create_CodeObjectValue(char* name, size_t arity, Global* global){
     RuntimeValue value = Alloc_Code(name, arity);
@@ -64,6 +66,24 @@ void Gen(CodeObject* co, AstNode* statement, Global* global){
             }
             break;
         }
+        
+        case AST_ReturnStatement: {
+            ReturnStatement expression = *(ReturnStatement*)statement;
+
+            Gen(co, (AstNode*)expression.value, global);
+
+            // ! We need to count locals in function, not in scope.
+            uint64 vars_declared_in_scope_count = locals_in_scope(co);
+            
+            if(vars_declared_in_scope_count > 0 || co->arity > 0){
+                Emit(co, OP_SCOPE_EXIT);
+                Emit64(co, vars_declared_in_scope_count);
+            }
+
+            emit_return(co, global);
+
+            break;
+        }
 
         case AST_MemberExpression: {
             MemberExpression expression = *(MemberExpression*)statement;
@@ -79,7 +99,7 @@ void Gen(CodeObject* co, AstNode* statement, Global* global){
             Gen(co, (AstNode*)expression.object, global);
 
             // Läs tillbaka senast emittade och kolla typ?
-            // TODO: IMPORTANT! Read back 64 bit. 
+            // ! IMPORTANT! Read back 64 bit. 
             uint8_t address = co->code[co->code_last - 8]; // Read back address
             uint8_t code = co->code[co->code_last - 9]; // läs tillbaka opcode
 
@@ -244,12 +264,8 @@ void Gen(CodeObject* co, AstNode* statement, Global* global){
 
             // Here goes cleanup if we add functions without block as body
 
-            if(new_co == global->main_fn){
-                Emit(new_co, OP_HALT);
-            }
-            else{
-                Emit(new_co, OP_RETURN);
-            }
+            // ! Do not emit return if previous instruction was explicit return
+            emit_return(new_co, global);
 
             break;
         }
@@ -258,7 +274,9 @@ void Gen(CodeObject* co, AstNode* statement, Global* global){
             BlockStatement blockStatement = *(BlockStatement*)statement;
 
             // Scope begin
+            uint8_t saved_scope = 0;
             if(!Is_Global_Scope(co)){
+                saved_scope = co->scope_level;
                 co->scope_level++;
             }
 
@@ -280,20 +298,20 @@ void Gen(CodeObject* co, AstNode* statement, Global* global){
             if(!Is_Global_Scope(co)){
 
                 // We need to pop all vars declared in this scope from the stack.
-                uint64 vars_declared_in_scope_count = 0;
-                while (co->locals_size > 0 && co->locals[co->locals_size - 1].scope_level == co->scope_level)
-                {
-                    vars_declared_in_scope_count++;
-                    co->locals_size--;
-                }
+                // ! dont emit this is previous instruction was explicit return
+                uint64 vars_declared_in_scope_count = locals_in_scope(co);
+
+                co->locals_size -= vars_declared_in_scope_count;
                 
                 if(vars_declared_in_scope_count > 0 || co->arity > 0){
                     Emit(co, OP_SCOPE_EXIT);
                     Emit64(co, vars_declared_in_scope_count);
                 }
 
-                co->scope_level--;
+                co->scope_level = saved_scope;
             }
+
+            
 
             break;
         }
@@ -350,10 +368,7 @@ void Gen(CodeObject* co, AstNode* statement, Global* global){
             if(Is_Global_Scope(co))
             { 
                 Global_Define(global, variableDeclaration.name); // This should return index directly
-                // int64 index = Global_GetIndexBufferString(global, &variableDeclaration.name);
-
-                // Emit(co, OP_SET_GLOBAL);
-                // Emit64(co, index);
+                // TODO: We need to set global value here. Needs to be numericliteral or stringliteral.
             }
             else{
                 if(variableDeclaration.value != NULL){
@@ -378,7 +393,7 @@ void Gen(CodeObject* co, AstNode* statement, Global* global){
 
         case AST_AssignmentExpression: {
             AssignmentExpression assignmentExpression = *(AssignmentExpression*)statement; 
-            Identifier* identifier = (Identifier*)assignmentExpression.assignee; // TODO: Handle expressions
+            Identifier* identifier = (Identifier*)assignmentExpression.assignee; // TODO: Handle member expressions
 
             // Emit value
             Gen(co, (AstNode*)assignmentExpression.value, global);
@@ -410,7 +425,7 @@ void Gen(CodeObject* co, AstNode* statement, Global* global){
 
 
 
-            // TODO: IMPORTANT! Read back 64 bit. 
+            // ! IMPORTANT! Read back 64 bit. 
             uint8_t address = co->code[co->code_last - 8]; // Read back function global address
 
             // TODO: IMPORTANT! Valitade arity for native and user defined functions. Example (native):
@@ -450,6 +465,28 @@ void Gen(CodeObject* co, AstNode* statement, Global* global){
 
 bool Is_Global_Scope(CodeObject* co){
     return co == NULL;
+}
+
+size_t locals_in_scope(CodeObject* co){
+    uint64 vars_declared_in_scope_count = 0;
+    uint64_t locals_size = co->locals_size;
+
+    while (locals_size > 0 && co->locals[locals_size - 1].scope_level == co->scope_level)
+    {
+        vars_declared_in_scope_count++;
+        locals_size--;
+    }
+
+    return vars_declared_in_scope_count;
+}
+
+void emit_return(CodeObject* co, Global* global){
+    if(co == global->main_fn){
+        Emit(co, OP_HALT);
+    }
+    else{
+        Emit(co, OP_RETURN);
+    }
 }
 
 size_t Numeric_Const_Index(CodeObject* co, float64 value){

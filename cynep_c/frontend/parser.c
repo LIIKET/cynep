@@ -5,7 +5,7 @@ Token Current();
 Token Consume();
 Token ConsumeExpect(TokenType type, char* error);
 
-AstNode*              Parse_Statement(Arena* arena);
+AstNode*                Parse_Statement(Arena* arena);
 Expression*             Parse_Expression(Arena* arena);
 VariableDeclaration*    Parse_VariableDeclaration(Arena* arena);
 TypeDeclaration*        Parse_TypeDeclaration(Arena* arena);
@@ -17,6 +17,7 @@ Expression*             Parse_MultiplicativeExpression(Arena* arena);
 IfStatement*            Parse_IfStatement(Arena* arena);
 WhileStatement*         Parse_WhileStatement(Arena* arena);
 BlockStatement*         Parse_BlockStatement(Arena* arena);
+ReturnStatement*        Parse_ReturnStatement(Arena* arena);
 
 Expression* Parse_CallMemberExpression(Arena* arena);
 CallExpression* Parse_CallExpression(Arena* arena, Expression* caller);
@@ -114,6 +115,9 @@ AstNode* Parse_Statement(Arena* arena)
         case Token_While: {
             return (AstNode*)Parse_WhileStatement(arena);
         }
+        case Token_Return: {
+            return (AstNode*)Parse_ReturnStatement(arena);
+        }
         default: {
             return (AstNode*)Parse_Expression(arena);
         }
@@ -150,6 +154,16 @@ FunctionDeclaration* Parse_FunctionDeclaration(Arena* arena)
     }
 
     return Create_FunctionDeclaration(arena_alloc(arena, sizeof(AstNode)), func_name.string, args, body);
+}
+
+ReturnStatement* Parse_ReturnStatement(Arena* arena){
+    Token return_token = Consume();
+
+    Expression* value = Parse_Expression(arena);
+
+    ConsumeExpect(Token_Semicolon, "Return statement should have a semicolon at the end.");
+
+    return Create_ReturnStatement(arena_alloc(arena, sizeof(AstNode)), value);
 }
 
 IfStatement* Parse_IfStatement(Arena* arena)

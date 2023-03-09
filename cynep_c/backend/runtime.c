@@ -532,6 +532,8 @@ LocalVar Local_Get(CodeObject* co, int64 index){
 #define STACK_LIMIT 512 // DANGER! TODO: Reduce this when scopes are implemented.
 
 RuntimeValue VM_exec(VM* vm, Global* global){
+    
+
     vm->global = global;
 
     vm->stack = malloc(sizeof(RuntimeValue) * STACK_LIMIT);

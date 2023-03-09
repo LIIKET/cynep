@@ -7,7 +7,13 @@ type player = {
 
 func add(argone, argtwo) {
     var result = argone + argtwo;
-    result
+
+    
+    if(argone == 2){
+        return 13;
+    }
+
+    return 1 + argtwo;
 }
 
 func main(){
@@ -25,5 +31,7 @@ func main(){
     }
 
     var asd = add(1, 2);
-    asd
+    var asdgg = add(1, 2);
+
+    return obj.positiony;
 }

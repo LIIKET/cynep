@@ -18,6 +18,7 @@ typedef struct Expression Expression;
 typedef struct IfStatement IfStatement;
 typedef struct WhileStatement WhileStatement;
 typedef struct FunctionDeclaration FunctionDeclaration;
+typedef struct ReturnStatement ReturnStatement;
 
 enum NodeType 
 {
@@ -26,6 +27,7 @@ enum NodeType
     AST_IfStatement,
     AST_WhileStatement,
     AST_VariableDeclaration,
+    AST_ReturnStatement,
     AST_TypeDefinition,
     AST_PropertyDeclaration,
     AST_FunctionDeclaration,
@@ -62,6 +64,10 @@ struct FunctionDeclaration {
     char* name;
     List* args; // List of identifiers, TODO: Replace with arg struct containing type info?
     BlockStatement* body;
+};
+
+struct ReturnStatement {
+    Expression* value;
 };
 
 struct Identifier {
@@ -128,6 +134,7 @@ struct AstNode {
         BinaryExpression comparison_expression;
         WhileStatement while_statement;
         FunctionDeclaration function_declaration;
+        ReturnStatement return_statement;
     }; 
     NodeType type;
 };
@@ -145,6 +152,13 @@ BlockStatement* Create_BlockStatement(AstNode* node, List* body) {
     node->block_statement.body = list_create(body);
 
     return (BlockStatement*)node;
+}
+
+ReturnStatement* Create_ReturnStatement(AstNode* node, Expression* value) {
+    node->type = AST_ReturnStatement;
+    node->return_statement.value = value;
+
+    return (ReturnStatement*)node;
 }
 
 FunctionDeclaration* Create_FunctionDeclaration(AstNode* memory, char* name, List* args, BlockStatement* block) {
