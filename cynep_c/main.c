@@ -7,6 +7,8 @@
 #include <ctype.h>
 #include <time.h>
 
+#include "util/containers.c"
+
 #include "util/defines.c"
 #include "util/diagnostics.c"
 #include "util/list.c"

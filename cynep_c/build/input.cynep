@@ -5,33 +5,41 @@ type player = {
 	positiony;
 }
 
-func add(argone, argtwo) {
-    var result = argone + argtwo;
+func add(arg1, arg2) {
+    var result = arg1 + arg2;
 
-    
-    if(argone == 2){
+    if(arg1 == 2){
         return 13;
     }
 
-    return 1 + argtwo;
+    return 1 + arg2;
 }
 
 func main(){
-
+	// This is a one line test comment.
+	var division = 9 / 3;
     var obj = alloc(player);
     var res = obj.positiony;
 
-    while(i < 1000000){
-        var asd = add(1, 2);
+    while(i < 500000){
         i = i + 1;
+        var asd = add(1, 2);
+        
+		var a = "Hello" + " Figaro, cigaro!"; 
+		
+		var test = obj;
     }
 
     if(100 > 50){
-        var a = "Hello" + " Sailor!"; 
+        var a = "Hello" + " Figaro, cigaro!"; 
     }
+	
+	var apa2 = "Hello" + " Figaro, cigaro!"; 
 
-    var asd = add(1, 2);
+    var asd = add(1, 5);
     var asdgg = add(1, 2);
+	
+	var apa1 = multiply(1, 3);
 
-    return obj.positiony;
+	return apa2;
 }

@@ -1,21 +1,21 @@
 #pragma once
 
 void  Compile(AstNode* statement, Global* global);
-size_t      Get_Offset(CodeObject* co);
-size_t      Numeric_Const_Index(CodeObject* co, float64 value);
-void        Gen(CodeObject* co, AstNode* statement, Global* global);
-void        Emit(CodeObject* co, uint8_t code);
-void        Write_Address_At_Offset(CodeObject* co, size_t offset, uint64_t value);
+size_t      Get_Offset(FunctionObject* co);
+size_t      Numeric_Const_Index(FunctionObject* co, float64 value);
+void        Gen(FunctionObject* co, AstNode* statement, Global* global);
+void        Emit(FunctionObject* co, uint8_t code);
+void        Write_Address_At_Offset(FunctionObject* co, size_t offset, uint64_t value);
 // void     Write_Byte_At_Offset(CodeObject* co, size_t offset, uint8_t value);
-void        Emit64(CodeObject* co, uint64_t value);
-int64       String_Const_Index(CodeObject* co, char* string);
-bool        Is_Global_Scope(CodeObject* co);
-size_t locals_in_scope(CodeObject* co);
-void emit_return(CodeObject* co, Global* global);
+void        Emit64(FunctionObject* co, uint64_t value);
+int64       String_Const_Index(FunctionObject* co, char* string);
+bool        Is_Global_Scope(FunctionObject* co);
+size_t      locals_in_scope(FunctionObject* co);
+void        emit_return(FunctionObject* co, Global* global);
 
 RuntimeValue Create_CodeObjectValue(char* name, size_t arity, Global* global){
     RuntimeValue value = Alloc_Code(name, arity);
-    CodeObject* co = &AS_CODE(value);
+    FunctionObject* co = &AS_FUNCTION(value);
 
     if(name[0] == 'm'){
         global->main_fn = co;
@@ -43,7 +43,7 @@ void Compile(AstNode* statement, Global* global){
     printf("Compiling: %d ms\n", compile_end/1000-compile_begin/1000);
 }
 
-void Gen(CodeObject* co, AstNode* statement, Global* global){
+void Gen(FunctionObject* co, AstNode* statement, Global* global){
     switch (statement->type)
     {
         case AST_BinaryExpression:{
@@ -72,8 +72,8 @@ void Gen(CodeObject* co, AstNode* statement, Global* global){
 
             Gen(co, (AstNode*)expression.value, global);
 
-            // ! We need to count locals in function, not in scope.
-            uint64 vars_declared_in_scope_count = locals_in_scope(co);
+            // Since we quit the whole function we exit scope with all locals in function
+            uint64 vars_declared_in_scope_count = co->locals_size;
             
             if(vars_declared_in_scope_count > 0 || co->arity > 0){
                 Emit(co, OP_SCOPE_EXIT);
@@ -243,7 +243,7 @@ void Gen(CodeObject* co, AstNode* statement, Global* global){
             size_t arity = functionDeclaration.args->count;
 
             RuntimeValue coValue = Create_CodeObjectValue(name, arity, global);
-            CodeObject* new_co = &AS_CODE(coValue);
+            FunctionObject* new_co = &AS_FUNCTION(coValue);
             
             Global_Add(global, new_co->name, coValue);
 
@@ -424,9 +424,7 @@ void Gen(CodeObject* co, AstNode* statement, Global* global){
             CallExpression callExpression = *(CallExpression*)statement; 
 
 
-
-            // ! IMPORTANT! Read back 64 bit. 
-            uint8_t address = co->code[co->code_last - 8]; // Read back function global address
+            // uint8_t address = co->code[co->code_last - 8]; // Read back function global address
 
             // TODO: IMPORTANT! Valitade arity for native and user defined functions. Example (native):
             /*
@@ -463,11 +461,11 @@ void Gen(CodeObject* co, AstNode* statement, Global* global){
     }
 }
 
-bool Is_Global_Scope(CodeObject* co){
+bool Is_Global_Scope(FunctionObject* co){
     return co == NULL;
 }
 
-size_t locals_in_scope(CodeObject* co){
+size_t locals_in_scope(FunctionObject* co){
     uint64 vars_declared_in_scope_count = 0;
     uint64_t locals_size = co->locals_size;
 
@@ -480,7 +478,7 @@ size_t locals_in_scope(CodeObject* co){
     return vars_declared_in_scope_count;
 }
 
-void emit_return(CodeObject* co, Global* global){
+void emit_return(FunctionObject* co, Global* global){
     if(co == global->main_fn){
         Emit(co, OP_HALT);
     }
@@ -489,7 +487,7 @@ void emit_return(CodeObject* co, Global* global){
     }
 }
 
-size_t Numeric_Const_Index(CodeObject* co, float64 value){
+size_t Numeric_Const_Index(FunctionObject* co, float64 value){
     for (size_t i = 0; i < co->constants_last + 1; i++)
     {
         if(co->constants[i].type != ValueType_Number){
@@ -505,7 +503,7 @@ size_t Numeric_Const_Index(CodeObject* co, float64 value){
     return co->constants_last++; // Increments after return
 }
 
-int64 String_Const_Index(CodeObject* co, char* string){
+int64 String_Const_Index(FunctionObject* co, char* string){
     for (size_t i = 0; i < co->constants_last + 1; i++)
     {
         if(co->constants[i].type != ValueType_Object){
@@ -524,7 +522,7 @@ int64 String_Const_Index(CodeObject* co, char* string){
     return co->constants_last++; // Increments after return
 }
 
-size_t Get_Offset(CodeObject* co){
+size_t Get_Offset(FunctionObject* co){
     return co->code_last;
 }
 
@@ -533,16 +531,16 @@ size_t Get_Offset(CodeObject* co){
 // }
 
 // Writes 64 bit
-void Write_Address_At_Offset(CodeObject* co, size_t offset, uint64_t value){
+void Write_Address_At_Offset(FunctionObject* co, size_t offset, uint64_t value){
     memcpy(&co->code[offset], &value, sizeof( uint64_t ));
 }
 
-void Emit(CodeObject* co, uint8_t code){
+void Emit(FunctionObject* co, uint8_t code){
     co->code[co->code_last] = code;
     co->code_last++;
 }
 
-void Emit64(CodeObject* co, uint64_t value){
+void Emit64(FunctionObject* co, uint64_t value){
     memcpy(&co->code[co->code_last + 0], &value, sizeof( uint64_t ));
     co->code_last += 8;
 }
@@ -594,7 +592,7 @@ void Disassemble(Global* global){
 
     for (size_t i = 0; i < global->code_objects_length; i++)
     {
-        CodeObject* co = global->code_objects[i];
+        FunctionObject* co = global->code_objects[i];
 
     printf("\n------------------ %s DISASSEMBLY ------------------\n\n", co->name);
 

@@ -41,7 +41,8 @@ enum ParseState {
     ParseState_Start,
     ParseState_Symbol,
     ParseState_Number,
-    ParseState_String
+    ParseState_String,
+    ParseState_Comment
 };
 
 struct Token {
@@ -209,8 +210,16 @@ Token* lexer_tokenize(TextFile* file) {
                     case '+':
                     case '-':
                     case '*':
-                    case '/':
                     case '%': { *NextTokenMem(pool) = Token_Operator_Create(Token_BinaryOperator, current_as_string); break; }    
+                    case '/': { 
+                        if(*lookahead == '/') {
+                            state = ParseState_Comment;
+                            pos++;
+                        } else{
+                            *NextTokenMem(pool) = Token_Operator_Create(Token_BinaryOperator, current_as_string);
+                        }
+                        break;
+                    }  
                     case '(': { *NextTokenMem(pool) = Token_Operator_Create(Token_OpenParen, current_as_string); break; }
                     case ')': { *NextTokenMem(pool) = Token_Operator_Create(Token_CloseParen, current_as_string); break; }   
                     case '{': { *NextTokenMem(pool) = Token_Operator_Create(Token_OpenBrace, current_as_string); break; }
@@ -219,11 +228,11 @@ Token* lexer_tokenize(TextFile* file) {
                     case ';': { *NextTokenMem(pool) = Token_Operator_Create(Token_Semicolon, current_as_string); break; }
                     case '.': { *NextTokenMem(pool) = Token_Operator_Create(Token_Dot, current_as_string); break; }
                     case '!': {   
-                        if(*lookahead == '=')                        {
+                        if(*lookahead == '=') {
                             *NextTokenMem(pool) = Token_Operator_Create(Token_ComparisonOperator, current_and_lookahead_as_string);  
                             pos++;
                         } else{
-                            // Some kind of negation operator
+                            // TODO: Unary negation operator
                         }
                         break;
                     }
@@ -305,7 +314,8 @@ Token* lexer_tokenize(TextFile* file) {
             case ParseState_Symbol: { 
                 switch (*current)
                 {
-                    case ALPHA: {
+                    case ALPHA: 
+                    case DIGIT: {
                         buff_length++;
                         break;
                     }  
@@ -362,6 +372,20 @@ Token* lexer_tokenize(TextFile* file) {
 
                         continue;
                     }
+                }
+                break;
+            }
+
+            case ParseState_Comment: {
+                switch (*current)
+                {
+                    case '\n': {
+                        state = ParseState_Start;
+                        continue;
+                    }
+                    default: {
+                        break;
+                    };
                 }
                 break;
             }

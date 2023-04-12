@@ -8,14 +8,14 @@ typedef struct VM VM;
 typedef struct RuntimeValue RuntimeValue;
 typedef struct Object Object;
 typedef struct StringObject StringObject;
-typedef struct CodeObject CodeObject;
+typedef struct FunctionObject FunctionObject;
 typedef struct GlobalVar GlobalVar;
 typedef struct Global Global;
 typedef struct LocalVar LocalVar;
 typedef struct TypeInstanceObject TypeInstanceObject;
 typedef struct MemberVar MemberVar;
 typedef struct NativeFunctionObject NativeFunctionObject;
-typedef struct FunctionObject FunctionObject;
+// typedef struct FunctionObject FunctionObject;
 typedef struct TypeInfoObject TypeInfoObject;
 typedef struct MemberInfo MemberInfo;
 typedef struct Frame Frame;
@@ -30,7 +30,7 @@ void            VM_Stack_Push(VM* vm, RuntimeValue* value);
 void            VM_Exception(char* msg);
 void            VM_DumpStack(VM* vm, uint8_t code);
 char*           opcodeToString(uint8_t opcode);
-int64 Member_GetIndex(TypeInfoObject* instance, char* name);
+int64_t         Member_GetIndex(TypeInfoObject* instance, char* name);
 
 
 #pragma region TYPES
@@ -76,25 +76,20 @@ struct NativeFunctionObject {
     size_t arity;
 };
 
-struct CodeObject {
+struct FunctionObject {
     Object object;
     char* name;
     size_t arity;
 
-    uint8_t* code; // Array of opcodes
-    size_t code_last;
+    uint8_t* code; // Array of opcodes // TODO: Dynamisk array
+    size_t code_last; // TODO: Remove
 
-    RuntimeValue* constants; // Array of constants
-    uint64_t constants_last;
+    RuntimeValue* constants; // Array of constants // TODO: Dynamisk array
+    uint64_t constants_last; // TODO: Remove
 
     int8_t scope_level;
     LocalVar* locals;
     uint64 locals_size;
-    uint64 locals_max;
-};
-
-struct FunctionObject {
-    CodeObject code;
 };
 
 struct TypeInfoObject {
@@ -134,35 +129,30 @@ struct LocalVar {
 struct Global {
     GlobalVar* globals; // Array of global variables
     int64 globals_size;
-    int64 globals_max;
 
-    CodeObject** code_objects; // all functions
+    FunctionObject** code_objects; // all functions
     size_t code_objects_length;
-    CodeObject* main_fn; // main function
-};
-
-struct VM {
-    uint8_t* ip; // Instruction pointer
-    Global* global;
-
-    CodeObject* fn;
-    RuntimeValue* sp; // Stack pointer
-    RuntimeValue* bp; // Base pointer / Frame pointer
-
-    RuntimeValue* stack; // Array of values
-    RuntimeValue* stack_start; // First address of stack
-    RuntimeValue* stack_end; // Last address of stack
-
-    Frame* callStack;
-    Frame* callStack_end;
-    Frame* csp; // call stack pointer
+    FunctionObject* main_fn; // main function
 };
 
 struct Frame {
     uint8_t* ra; // return address
     RuntimeValue* bp; // base pointer of the caller
-    CodeObject* fn; // reference to the running function
+    FunctionObject* fn; // reference to the running function
 };
+
+struct VM {
+    uint8_t* ip; // Instruction pointer
+    Global* global;
+    FunctionObject* fn; // Currently executing function
+    RuntimeValue* sp; // Stack pointer
+    RuntimeValue* bp; // Base pointer / Frame pointer
+    RuntimeValue stack[512]; // Array of values
+    Frame callStack[512];
+    Frame* csp; // call stack pointer
+};
+
+
 
 #pragma endregion
 
@@ -173,7 +163,7 @@ struct Frame {
 #define RUNTIME_NULL() (RuntimeValue){.type = ValueType_Null }
 
 #define AS_STRING(value) (*(StringObject*)value.object)
-#define AS_CODE(value) (*(CodeObject*)value.object)
+// #define AS_CODE(value) (*(FunctionObject*)value.object)
 #define AS_NATIVE_FUNCTION(value) (*(NativeFunctionObject*)value.object)
 #define AS_TYPEINFO(value) (*(TypeInfoObject*)value.object)
 #define AS_TYPEINSTANCE(value) (*(TypeInstanceObject*)value.object)
@@ -199,7 +189,7 @@ char* RuntimeValue_ToString(RuntimeValue value){
         return "null";
     }
     if(value.type == ValueType_Object && value.object->objectType == ObjectType_Code){
-        CodeObject code = AS_CODE(value);
+        FunctionObject code = AS_FUNCTION(value);
         return code.name;
     }
     if(value.type == ValueType_Object && value.object->objectType == ObjectType_String){
@@ -287,7 +277,7 @@ RuntimeValue Alloc_Code(char* name, size_t arity){
     RuntimeValue result;
     result.type = ValueType_Object;
 
-    CodeObject* co = malloc(sizeof(CodeObject));
+    FunctionObject* co = malloc(sizeof(FunctionObject));
     co->object.objectType = ObjectType_Code;
     co->name = name;
     co->code = malloc(sizeof(uint8_t) * 100000000); // TODO: DANGER! Handle memory! 100 000 000, Crashes if too many instructions
@@ -299,7 +289,6 @@ RuntimeValue Alloc_Code(char* name, size_t arity){
 
     co->locals = malloc(sizeof(LocalVar) * 100000000); // TODO: DANGER! Handle memory when adding
     co->locals_size = 0;
-    co->locals_max = 10;
 
     result.object = (Object*)co;
     
@@ -440,8 +429,7 @@ void Global_AddNativeFunction(Global* global, char* name, void* func_ptr, size_t
 
 Global* Create_Global(){
     Global* global = malloc(sizeof(Global));
-    global->globals = malloc(sizeof(GlobalVar) * 10); // TODO: DANGER! Handle memory when adding
-    global->globals_max = 10;
+    global->globals = malloc(sizeof(GlobalVar) * 100); // TODO: DANGER! Handle memory when adding
     global->globals_size = 0;
 
     global->code_objects_length = 0;
@@ -453,11 +441,11 @@ Global* Create_Global(){
 
 #pragma region LOCALS
 
-int64 Local_GetIndex(CodeObject* co, char* name){
-    // TODO: Take the one with the closest scope level.
+int64 Local_GetIndex(FunctionObject* co, char* name){
+    // We iterate backwards to grab the one with the closest scope level first. (It should be added closer to the end)
     if(co->locals_size > 0){
         for(int64 i = co->locals_size - 1; i >= 0; i--){
-            if(strcmp(name, co->locals[i].name) == 0 && co->locals[i].scope_level == co->scope_level){
+            if(strcmp(name, co->locals[i].name) == 0 ){ // && co->locals[i].scope_level == co->scope_level
                 return i;
             }
         }
@@ -466,7 +454,7 @@ int64 Local_GetIndex(CodeObject* co, char* name){
     return -1;
 }
 
-void Local_Define(CodeObject* co, char* name){
+void Local_Define(FunctionObject* co, char* name){
     if(strcmp("si", name) == 0){
         int asd = 0;
     }
@@ -484,7 +472,7 @@ void Local_Define(CodeObject* co, char* name){
     var->value = RUNTIME_NULL(); // TODO: Set to null
 }
 
-LocalVar Local_Get(CodeObject* co, int64 index){
+LocalVar Local_Get(FunctionObject* co, int64 index){
     return co->locals[index];
 }
 
@@ -529,21 +517,13 @@ LocalVar Local_Get(CodeObject* co, int64 index){
 #define OP_CMP_LE           0x05
 #define OP_CMP_NE           0x06
 
-#define STACK_LIMIT 512 // DANGER! TODO: Reduce this when scopes are implemented.
+#define STACK_LIMIT 512
 
 RuntimeValue VM_exec(VM* vm, Global* global){
-    
 
     vm->global = global;
-
-    vm->stack = malloc(sizeof(RuntimeValue) * STACK_LIMIT);
-    vm->stack_start = vm->stack;
-    vm->stack_end = vm->stack_start + sizeof(RuntimeValue) * STACK_LIMIT;
-
-    vm->callStack = malloc(sizeof(Frame) * STACK_LIMIT);
-    vm->callStack_end = vm->callStack + sizeof(Frame) * STACK_LIMIT;
     
-    CodeObject* co = global->main_fn;
+    FunctionObject* co = global->main_fn;
     vm->fn = co;
     vm->ip = &co->code[0];
     vm->sp = &vm->stack[0];
@@ -577,7 +557,6 @@ RuntimeValue VM_Eval(VM* vm, Global* global){
             case OP_HALT:{
                 int64 t2 = timestamp();
                 printf("Execution time: %d ms\n", t2/1000-t1/1000);
-                //return RUNTIME_NULL(); // Hack!!!
                 return VM_Stack_Pop(vm); 
             }     
 
@@ -747,7 +726,7 @@ RuntimeValue VM_Eval(VM* vm, Global* global){
 
             case OP_GET_LOCAL:{
                 uint64 address = VM_Read_Address(vm);
-                if(address < 0 ){ //|| address >= vm->stack_end
+                if(address < 0 ){ 
                     VM_Exception("Invalid variable index.");
                 }
 
@@ -809,7 +788,7 @@ RuntimeValue VM_Eval(VM* vm, Global* global){
                     VM_Stack_Push(vm, &res); // Push the result
                 }
                 else{
-                    CodeObject* fn = (CodeObject*)(fnValue.object);
+                    FunctionObject* fn = (FunctionObject*)(fnValue.object);
 
                     // save execution context, restored on OP_RETURN
                     Frame fr = {
@@ -840,7 +819,6 @@ RuntimeValue VM_Eval(VM* vm, Global* global){
                 vm->bp = vm->csp->bp;
                 vm->fn = vm->csp->fn;
                 
-
                 break;
             }
 
@@ -859,7 +837,7 @@ RuntimeValue VM_Eval(VM* vm, Global* global){
 
 // Reads 64 bit address.
 uint64_t VM_Read_Address(VM* vm){ 
-    uint64_t result = *vm->ip;
+    uint64_t result;
     memcpy(&result, vm->ip, sizeof(uint64_t));
     vm->ip += 8;
 
@@ -875,7 +853,7 @@ uint8_t VM_Peek_Byte(VM* vm){
 }
 
 void VM_Stack_Push(VM* vm, RuntimeValue* value){
-    if(vm->sp == vm->stack_end){
+    if(vm->sp == &vm->stack[512]){
         VM_Exception("Stack Overflow");
     }
     *vm->sp = *value;
@@ -883,7 +861,7 @@ void VM_Stack_Push(VM* vm, RuntimeValue* value){
 }
 
 RuntimeValue VM_Stack_Pop(VM* vm){
-    if(vm->sp == vm->stack_start){
+    if(vm->sp == vm->stack){
         VM_Exception("Stack Empty");
     }
     vm->sp--;
@@ -891,7 +869,7 @@ RuntimeValue VM_Stack_Pop(VM* vm){
 }
 
 RuntimeValue VM_Stack_Peek(VM* vm, size_t offset){
-    if(vm->sp < vm->stack_start){
+    if(vm->sp < vm->stack){
         VM_Exception("Stack Empty");
     }
     return *(vm->sp -1 - offset);
@@ -903,14 +881,14 @@ void VM_Exception(char* msg){
 }
 
 void VM_DumpStack(VM* vm, uint8_t code){
-    // size_t offset = vm->ip;
+
     char* op  = opcodeToString(code);
     printf("------------------ STACK AT %-10s -------------\n", op);
 
-    if(vm->sp == vm->stack_start){
+    if(vm->sp == vm->stack){
         printf("(empty)\n");
     }
-    else if(vm->sp < vm->stack_start){
+    else if(vm->sp < vm->stack){
            printf("(less)\n");     
     }
     else{
