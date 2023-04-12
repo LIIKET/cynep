@@ -87,12 +87,13 @@ DOCUMENTATION
 #define array_length    stbds_arrlen
 #define arrlenu         stbds_arrlenu
 #define array_push      stbds_arrput
-#define arrpop          stbds_arrpop
+#define array_pop          stbds_arrpop
+#define array_popn          stbds_arrpopn
 #define arrfree         stbds_arrfree
 #define arraddnptr      stbds_arraddnptr
 #define arraddnindex    stbds_arraddnindex
 #define arrsetlen       stbds_arrsetlen
-#define arrlast         stbds_arrlast
+#define array_last         stbds_arrlast
 #define arrins          stbds_arrins
 #define arrinsn         stbds_arrinsn
 #define arrdel          stbds_arrdel
@@ -112,6 +113,7 @@ extern void  array_free_f(void *a);
 #define stbds_arrlenu(a)        ((a) ?             stbds_header(a)->length : 0)
 #define stbds_arrput(a,v)       (stbds_arrmaybegrow(a,1), (a)[stbds_header(a)->length++] = (v))
 #define stbds_arrpop(a)         (stbds_header(a)->length--, (a)[stbds_header(a)->length])
+#define stbds_arrpopn(a, n)         (stbds_header(a)->length-=n, (a)[stbds_header(a)->length])
 #define stbds_arraddnptr(a,n)   (stbds_arrmaybegrow(a,n), (n) ? (stbds_header(a)->length += (n), &(a)[stbds_header(a)->length-(n)]) : (a))
 #define stbds_arraddnindex(a,n) (stbds_arrmaybegrow(a,n), (n) ? (stbds_header(a)->length += (n), stbds_header(a)->length-(n)) : stbds_arrlen(a))
 #define stbds_arraddnoff        stbds_arraddnindex

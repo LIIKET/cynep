@@ -10,7 +10,7 @@ typedef struct Object Object;
 typedef struct StringObject StringObject;
 typedef struct FunctionObject FunctionObject;
 typedef struct GlobalVar GlobalVar;
-typedef struct Global Global;
+typedef struct Program Program;
 typedef struct LocalVar LocalVar;
 typedef struct TypeInstanceObject TypeInstanceObject;
 typedef struct MemberVar MemberVar;
@@ -20,7 +20,7 @@ typedef struct TypeInfoObject TypeInfoObject;
 typedef struct MemberInfo MemberInfo;
 typedef struct Frame Frame;
 
-RuntimeValue    VM_Eval(VM* vm, Global* global);
+RuntimeValue    VM_Eval(VM* vm, Program* global);
 RuntimeValue    VM_Stack_Peek(VM* vm, size_t offset);
 RuntimeValue    VM_Stack_Pop(VM* vm);
 uint8_t         VM_Read_Byte(VM* vm);
@@ -80,14 +80,11 @@ struct FunctionObject {
     Object object;
     char* name;
     size_t arity;
-
     uint8_t* code;
     RuntimeValue* constants;
-
-
-    int8_t scope_level;
     LocalVar* locals;
-    uint64 locals_size;
+
+    int8_t scope_level; // Only for compiler state
 };
 
 struct TypeInfoObject {
@@ -124,11 +121,11 @@ struct LocalVar {
     RuntimeValue value;
 };
 
-struct Global {
+struct Program {
     GlobalVar* globals; // Array of global variables
     int64 globals_size;
 
-    FunctionObject** code_objects; // all functions
+    FunctionObject** code_objects; // all functions //! Why is this an array of pointers? Fix?
     size_t code_objects_length;
     FunctionObject* main_fn; // main function
 };
@@ -141,7 +138,7 @@ struct Frame {
 
 struct VM {
     uint8_t* ip; // Instruction pointer
-    Global* global;
+    Program* global;
     FunctionObject* fn; // Currently executing function
     RuntimeValue* sp; // Stack pointer
     RuntimeValue* bp; // Base pointer / Frame pointer
@@ -280,11 +277,9 @@ RuntimeValue Alloc_Code(char* name, size_t arity){
     co->name = name;
     co->code = NULL;
     co->constants = NULL;
+    co->locals = NULL;
     co->scope_level = 0;
     co->arity = arity;
-
-    co->locals = malloc(sizeof(LocalVar) * 100000000); // TODO: DANGER! Handle memory when adding
-    co->locals_size = 0;
 
     result.object = (Object*)co;
     
@@ -343,11 +338,11 @@ RuntimeValue Alloc_TypeInstance(TypeInfoObject* typeInfo){
 
 #pragma region GLOBAL_OBJECT
 
-GlobalVar Global_Get(Global* global, int64 index){
+GlobalVar Global_Get(Program* global, int64 index){
     return global->globals[index];
 }
 
-void Global_Set(Global* global, int64 index, RuntimeValue* value){
+void Global_Set(Program* global, int64 index, RuntimeValue* value){
     if(index >= global->globals_size){
         printf("\033[0;31mVM Error. Global index %n does not exist.\033[0m\n", index);
         exit(0);
@@ -356,7 +351,7 @@ void Global_Set(Global* global, int64 index, RuntimeValue* value){
     global->globals[index].value = *value;
 }
 
-int64 Global_GetIndex(Global* global, char* name){
+int64 Global_GetIndex(Program* global, char* name){
     if(global->globals_size > 1){
         for(int64 i = global->globals_size - 1; i >= 0; i--){
             if(strcmp(global->globals[i].name, name) == 0){
@@ -384,7 +379,8 @@ MemberVar Member_Get(TypeInstanceObject* co, int64 index){
     return co->members[index];
 }
 
-void Global_Define(Global* global, char* name){
+void program_define_global(Program* global, char* name)
+{
     int64 index = Global_GetIndex(global, name);
 
     if(index != -1){
@@ -397,7 +393,8 @@ void Global_Define(Global* global, char* name){
     var->value = NUMBER(0); // TODO: Set to null
 }
 
-void Global_Add(Global* global, char* name, RuntimeValue value){
+void program_add_global(Program* global, char* name, RuntimeValue value)
+{
     if(Global_GetIndex(global, name) != -1){
         return;
     }
@@ -409,7 +406,8 @@ void Global_Add(Global* global, char* name, RuntimeValue value){
     global->globals_size++;
 }
 
-void Global_AddNativeFunction(Global* global, char* name, void* func_ptr, size_t arity){
+void program_add_native_function(Program* global, char* name, void* func_ptr, size_t arity)
+{
     if(Global_GetIndex(global, name) != -1){
         return;
     }
@@ -423,8 +421,8 @@ void Global_AddNativeFunction(Global* global, char* name, void* func_ptr, size_t
     global->globals_size++;
 }
 
-Global* Create_Global(){
-    Global* global = malloc(sizeof(Global));
+Program* make_program(){
+    Program* global = malloc(sizeof(Program));
     global->globals = malloc(sizeof(GlobalVar) * 100); // TODO: DANGER! Handle memory when adding
     global->globals_size = 0;
 
@@ -439,9 +437,9 @@ Global* Create_Global(){
 
 int64 Local_GetIndex(FunctionObject* co, char* name){
     // We iterate backwards to grab the one with the closest scope level first. (It should be added closer to the end)
-    if(co->locals_size > 0){
-        for(int64 i = co->locals_size - 1; i >= 0; i--){
-            if(strcmp(name, co->locals[i].name) == 0 ){ // && co->locals[i].scope_level == co->scope_level
+    if(array_length(co->locals) > 0){
+        for(int64 i = array_length(co->locals) - 1; i >= 0; i--){
+            if(strcmp(name, co->locals[i].name) == 0 ){
                 return i;
             }
         }
@@ -461,11 +459,12 @@ void Local_Define(FunctionObject* co, char* name){
         return;
     }
 
-    LocalVar* var = &co->locals[co->locals_size++];
-    var->scope_level = co->scope_level;
-    var->name = name;
+    LocalVar var;
+    var.scope_level = co->scope_level;
+    var.name = name;
+    var.value = RUNTIME_NULL();
 
-    var->value = RUNTIME_NULL(); // TODO: Set to null
+    array_push(co->locals, var);
 }
 
 LocalVar Local_Get(FunctionObject* co, int64 index){
@@ -515,7 +514,7 @@ LocalVar Local_Get(FunctionObject* co, int64 index){
 
 #define STACK_LIMIT 512
 
-RuntimeValue VM_exec(VM* vm, Global* global){
+RuntimeValue VM_exec(VM* vm, Program* global){
 
     vm->global = global;
     
@@ -539,14 +538,14 @@ RuntimeValue VM_exec(VM* vm, Global* global){
     } while (false)                             \
 
 
-RuntimeValue VM_Eval(VM* vm, Global* global){
+RuntimeValue VM_Eval(VM* vm, Program* global){
     int64 t1 = timestamp();
 
     while(true){
         uint8_t opcode = VM_Read_Byte(vm);
 
         // Introspect stack for debugging
-        // VM_DumpStack(vm, opcode);
+        VM_DumpStack(vm, opcode);
 
         switch (opcode)
         {

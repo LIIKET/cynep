@@ -71,10 +71,10 @@ int main(int argc, char**argv)
     AstNode* program = Build_SyntaxTree(tokens);
 
     // Setup global object
-    Global* global = Create_Global();
-    Global_Add(global, "VERSION", NUMBER(0.1));
-    Global_AddNativeFunction(global, "multiply", &Multiply, 2);
-    Global_AddNativeFunction(global, "alloc", &Alloc, 1);
+    Program* global = make_program();
+    program_add_global(global, "VERSION", NUMBER(0.1));
+    program_add_native_function(global, "multiply", &Multiply, 2);
+    program_add_native_function(global, "alloc", &Alloc, 1);
 
 
 

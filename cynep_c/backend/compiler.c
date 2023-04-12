@@ -1,9 +1,9 @@
 #pragma once
 
-void  Compile(AstNode* statement, Global* global);
+void  Compile(AstNode* statement, Program* global);
 size_t      Get_Offset(FunctionObject* co);
 size_t      Numeric_Const_Index(FunctionObject* co, float64 value);
-void        Gen(FunctionObject* co, AstNode* statement, Global* global);
+void        Gen(FunctionObject* co, AstNode* statement, Program* global);
 void        Emit(FunctionObject* co, uint8_t code);
 void        Write_Address_At_Offset(FunctionObject* co, size_t offset, uint64_t value);
 // void     Write_Byte_At_Offset(CodeObject* co, size_t offset, uint8_t value);
@@ -11,9 +11,9 @@ void        Emit64(FunctionObject* co, uint64_t value);
 int64       String_Const_Index(FunctionObject* co, char* string);
 bool        Is_Global_Scope(FunctionObject* co);
 size_t      locals_in_scope(FunctionObject* co);
-void        emit_return(FunctionObject* co, Global* global);
+void        emit_return(FunctionObject* co, Program* global);
 
-RuntimeValue Create_CodeObjectValue(char* name, size_t arity, Global* global){
+RuntimeValue Create_CodeObjectValue(char* name, size_t arity, Program* global){
     RuntimeValue value = Alloc_Code(name, arity);
     FunctionObject* co = &AS_FUNCTION(value);
 
@@ -27,15 +27,15 @@ RuntimeValue Create_CodeObjectValue(char* name, size_t arity, Global* global){
     return value;
 }
 
-void Compile(AstNode* statement, Global* global){
+void Compile(AstNode* statement, Program* global){
 
     global->code_objects= malloc(sizeof(void*) * 100); // TODO: DANGER! Handle memory! Crashes if too many functions
 
     int64 compile_begin = timestamp();
 
-    Global_Add(global, "null", RUNTIME_NULL());
-    Global_Add(global, "true", BOOLEAN(true));
-    Global_Add(global, "false", BOOLEAN(false));
+    program_add_global(global, "null", RUNTIME_NULL());
+    program_add_global(global, "true", BOOLEAN(true));
+    program_add_global(global, "false", BOOLEAN(false));
 
     Gen(NULL, statement, global);
 
@@ -43,7 +43,7 @@ void Compile(AstNode* statement, Global* global){
     printf("Compiling: %d ms\n", compile_end/1000-compile_begin/1000);
 }
 
-void Gen(FunctionObject* co, AstNode* statement, Global* global){
+void Gen(FunctionObject* co, AstNode* statement, Program* global){
     switch (statement->type)
     {
         case AST_BinaryExpression:{
@@ -73,7 +73,7 @@ void Gen(FunctionObject* co, AstNode* statement, Global* global){
             Gen(co, (AstNode*)expression.value, global);
 
             // Since we quit the whole function we exit scope with all locals in function
-            uint64 vars_declared_in_scope_count = co->locals_size;
+            uint64 vars_declared_in_scope_count = array_length(co->locals);
             
             if(vars_declared_in_scope_count > 0 || co->arity > 0){
                 Emit(co, OP_SCOPE_EXIT);
@@ -176,7 +176,7 @@ void Gen(FunctionObject* co, AstNode* statement, Global* global){
 
             MemberInfo asd = typeInfo->members[0];
 
-            Global_Add(global, typeInfo->name, typeInfoValue);
+            program_add_global(global, typeInfo->name, typeInfoValue);
 
             break;
         }
@@ -245,7 +245,7 @@ void Gen(FunctionObject* co, AstNode* statement, Global* global){
             RuntimeValue coValue = Create_CodeObjectValue(name, arity, global);
             FunctionObject* new_co = &AS_FUNCTION(coValue);
             
-            Global_Add(global, new_co->name, coValue);
+            program_add_global(global, new_co->name, coValue);
 
             new_co->scope_level = 1;
 
@@ -301,7 +301,9 @@ void Gen(FunctionObject* co, AstNode* statement, Global* global){
                 // ! dont emit this is previous instruction was explicit return
                 uint64 vars_declared_in_scope_count = locals_in_scope(co);
 
-                co->locals_size -= vars_declared_in_scope_count;
+                //co->locals_size -= vars_declared_in_scope_count;
+                array_popn(co->locals, vars_declared_in_scope_count);
+                
                 
                 if(vars_declared_in_scope_count > 0 || co->arity > 0){
                     Emit(co, OP_SCOPE_EXIT);
@@ -367,7 +369,7 @@ void Gen(FunctionObject* co, AstNode* statement, Global* global){
 
             if(Is_Global_Scope(co))
             { 
-                Global_Define(global, variableDeclaration.name); // This should return index directly
+                program_define_global(global, variableDeclaration.name); // This should return index directly
                 // TODO: We need to set global value here. Needs to be numericliteral or stringliteral.
             }
             else{
@@ -466,19 +468,22 @@ bool Is_Global_Scope(FunctionObject* co){
 }
 
 size_t locals_in_scope(FunctionObject* co){
-    uint64 vars_declared_in_scope_count = 0;
-    uint64_t locals_size = co->locals_size;
+    size_t vars_declared_in_scope = 0;
 
-    while (locals_size > 0 && co->locals[locals_size - 1].scope_level == co->scope_level)
+    for (size_t i = array_length(co->locals) - 1; i >= 0; i--)
     {
-        vars_declared_in_scope_count++;
-        locals_size--;
+        if(co->locals[i].scope_level == co->scope_level){
+            vars_declared_in_scope++;
+        }
+        else{
+            break;
+        }
     }
 
-    return vars_declared_in_scope_count;
+    return vars_declared_in_scope;
 }
 
-void emit_return(FunctionObject* co, Global* global){
+void emit_return(FunctionObject* co, Program* global){
     if(co == global->main_fn){
         Emit(co, OP_HALT);
     }
@@ -500,7 +505,7 @@ size_t Numeric_Const_Index(FunctionObject* co, float64 value){
 
     array_push(co->constants, NUMBER(value));
 
-    return array_length(co->constants) - 1; // Increments after return
+    return array_length(co->constants) - 1; 
 }
 
 int64 String_Const_Index(FunctionObject* co, char* string){
@@ -519,7 +524,7 @@ int64 String_Const_Index(FunctionObject* co, char* string){
 
     array_push(co->constants, Alloc_String(string));
 
-    return array_length(co->constants) - 1; // Increments after return
+    return array_length(co->constants) - 1;
 }
 
 size_t Get_Offset(FunctionObject* co){
@@ -586,7 +591,7 @@ char* cmpCodeToString(uint8_t cmpcode){
     }
 }
 
-void Disassemble(Global* global){
+void Disassemble(Program* global){
 
 
     for (size_t i = 0; i < global->code_objects_length; i++)
