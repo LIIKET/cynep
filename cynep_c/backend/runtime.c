@@ -545,7 +545,7 @@ RuntimeValue VM_Eval(VM* vm, Program* global){
         uint8_t opcode = VM_Read_Byte(vm);
 
         // Introspect stack for debugging
-        VM_DumpStack(vm, opcode);
+        //VM_DumpStack(vm, opcode);
 
         switch (opcode)
         {
