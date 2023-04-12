@@ -81,11 +81,9 @@ struct FunctionObject {
     char* name;
     size_t arity;
 
-    uint8_t* code; // Array of opcodes // TODO: Dynamisk array
-    size_t code_last; // TODO: Remove
+    uint8_t* code;
+    RuntimeValue* constants;
 
-    RuntimeValue* constants; // Array of constants // TODO: Dynamisk array
-    uint64_t constants_last; // TODO: Remove
 
     int8_t scope_level;
     LocalVar* locals;
@@ -280,10 +278,8 @@ RuntimeValue Alloc_Code(char* name, size_t arity){
     FunctionObject* co = malloc(sizeof(FunctionObject));
     co->object.objectType = ObjectType_Code;
     co->name = name;
-    co->code = malloc(sizeof(uint8_t) * 100000000); // TODO: DANGER! Handle memory! 100 000 000, Crashes if too many instructions
-    co->constants = malloc(sizeof(RuntimeValue*) * 100000000); // TODO: DANGER! Handle memory! 100 000 000, Crashes if too many constants
-    co->code_last = 0;
-    co->constants_last = 0;
+    co->code = NULL;
+    co->constants = NULL;
     co->scope_level = 0;
     co->arity = arity;
 

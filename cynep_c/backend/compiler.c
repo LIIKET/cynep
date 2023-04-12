@@ -100,8 +100,8 @@ void Gen(FunctionObject* co, AstNode* statement, Global* global){
 
             // Läs tillbaka senast emittade och kolla typ?
             // ! IMPORTANT! Read back 64 bit. 
-            uint8_t address = co->code[co->code_last - 8]; // Read back address
-            uint8_t code = co->code[co->code_last - 9]; // läs tillbaka opcode
+            uint8_t address = co->code[array_length(co->code) - 8]; // Read back address
+            uint8_t code = co->code[array_length(co->code) - 9]; // läs tillbaka opcode
 
             if(code == OP_GET_LOCAL){
                 LocalVar assd = Local_Get(co, address); // Check type and use when getting typeinfo
@@ -488,7 +488,7 @@ void emit_return(FunctionObject* co, Global* global){
 }
 
 size_t Numeric_Const_Index(FunctionObject* co, float64 value){
-    for (size_t i = 0; i < co->constants_last + 1; i++)
+    for (size_t i = 0; i < array_length(co->constants); i++)
     {
         if(co->constants[i].type != ValueType_Number){
             continue;
@@ -498,32 +498,32 @@ size_t Numeric_Const_Index(FunctionObject* co, float64 value){
         }
     }
 
-    co->constants[co->constants_last] = NUMBER(value);
+    array_push(co->constants, NUMBER(value));
 
-    return co->constants_last++; // Increments after return
+    return array_length(co->constants) - 1; // Increments after return
 }
 
 int64 String_Const_Index(FunctionObject* co, char* string){
-    for (size_t i = 0; i < co->constants_last + 1; i++)
+    for (size_t i = 0; i < array_length(co->constants); i++)
     {
         if(co->constants[i].type != ValueType_Object){
             continue;
         }
 
         StringObject* strObj = (StringObject*)co->constants[i].object;
-        // uint64 current_length = strlen(strObj->string);
 
         if(strcmp(string, strObj->string) == 0){
             return i;
         }
     }
 
-    co->constants[co->constants_last] = Alloc_String(string);
-    return co->constants_last++; // Increments after return
+    array_push(co->constants, Alloc_String(string));
+
+    return array_length(co->constants) - 1; // Increments after return
 }
 
 size_t Get_Offset(FunctionObject* co){
-    return co->code_last;
+    return array_length(co->code);
 }
 
 // void Write_Byte_At_Offset(CodeObject* co, size_t offset, uint8_t value){
@@ -536,13 +536,12 @@ void Write_Address_At_Offset(FunctionObject* co, size_t offset, uint64_t value){
 }
 
 void Emit(FunctionObject* co, uint8_t code){
-    co->code[co->code_last] = code;
-    co->code_last++;
+    array_push(co->code, code);
 }
 
 void Emit64(FunctionObject* co, uint64_t value){
-    memcpy(&co->code[co->code_last + 0], &value, sizeof( uint64_t ));
-    co->code_last += 8;
+    uint8_t* loc = arraddnptr(co->code, 8);
+    memcpy(loc, &value, sizeof( uint64_t ));
 }
 
 #pragma region DISASSEMBLER
@@ -597,7 +596,7 @@ void Disassemble(Global* global){
     printf("\n------------------ %s DISASSEMBLY ------------------\n\n", co->name);
 
 size_t offset = 0;
-    while(offset < co->code_last){
+    while(offset < array_length(co->code)){
         uint8_t opcode = co->code[offset];
         uint64_t args;
 
