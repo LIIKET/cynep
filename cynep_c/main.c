@@ -92,7 +92,7 @@ int main(int argc, char**argv)
 
     // Start execution
     VM virtualMachine;
-    RuntimeValue result = VM_exec(&virtualMachine, global);
+    RuntimeValue result = vm_exec(&virtualMachine, global);
 
     printf("Execution result: %s", RuntimeValue_ToString(result));
 }

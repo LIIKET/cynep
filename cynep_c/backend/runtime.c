@@ -20,7 +20,7 @@ typedef struct TypeInfoObject TypeInfoObject;
 typedef struct MemberInfo MemberInfo;
 typedef struct Frame Frame;
 
-RuntimeValue    VM_Eval(VM* vm, Program* global);
+RuntimeValue    vm_interp(VM* vm, Program* global);
 RuntimeValue    VM_Stack_Peek(VM* vm, size_t offset);
 RuntimeValue    VM_Stack_Pop(VM* vm);
 uint8_t         VM_Read_Byte(VM* vm);
@@ -437,9 +437,12 @@ Program* make_program(){
 
 int64 Local_GetIndex(FunctionObject* co, char* name){
     // We iterate backwards to grab the one with the closest scope level first. (It should be added closer to the end)
-    if(array_length(co->locals) > 0){
-        for(int64 i = array_length(co->locals) - 1; i >= 0; i--){
-            if(strcmp(name, co->locals[i].name) == 0 ){
+    if(array_length(co->locals) > 0)
+    {
+        for(int64 i = array_length(co->locals) - 1; i >= 0; i--)
+        {
+            if(strcmp(name, co->locals[i].name) == 0 )
+            {
                 return i;
             }
         }
@@ -455,7 +458,8 @@ void Local_Define(FunctionObject* co, char* name){
 
     int64 index = Local_GetIndex(co, name);
 
-    if(index != -1){
+    if(index != -1)
+    {
         return;
     }
 
@@ -497,13 +501,13 @@ LocalVar Local_Get(FunctionObject* co, int64 index){
 #define OP_JMP              0x08
 #define OP_POP              0x09
 #define OP_GET_GLOBAL       0x0A
-#define OP_SET_GLOBAL       0x0B
-#define OP_GET_LOCAL        0x0C
-#define OP_SET_LOCAL        0x0D
-#define OP_SCOPE_EXIT       0x0E
-#define OP_CALL             0x0F
-#define OP_RETURN           0x10
-#define OP_GET_MEMBER       0x11
+#define OP_SET_GLOBAL       11
+#define OP_GET_LOCAL        12
+#define OP_SET_LOCAL        13
+#define OP_SCOPE_EXIT       14
+#define OP_CALL             15
+#define OP_RETURN           16
+#define OP_GET_MEMBER       17
 
 #define OP_CMP_GT           0x01
 #define OP_CMP_LT           0x02
@@ -514,8 +518,8 @@ LocalVar Local_Get(FunctionObject* co, int64 index){
 
 #define STACK_LIMIT 512
 
-RuntimeValue VM_exec(VM* vm, Program* global){
-
+RuntimeValue vm_exec(VM* vm, Program* global)
+{
     vm->global = global;
     
     FunctionObject* co = global->main_fn;
@@ -526,10 +530,28 @@ RuntimeValue VM_exec(VM* vm, Program* global){
 
     vm->csp = vm->callStack;
 
-    return VM_Eval(vm, global);
+    return vm_interp(vm, global);
 }
 
-#define BINARY_OP(operation)                    \
+RuntimeValue vm_interp(VM* vm, Program* global)
+{
+    int64 t1 = timestamp();
+
+    static void* dispatch_table[] = {
+    &&DO_OP_HALT, &&DO_OP_CONST, &&DO_OP_ADD, &&DO_OP_SUB,
+    &&DO_OP_MUL, &&DO_OP_DIV, &&DO_OP_CMP, &&DO_OP_JMP_IF_FALSE, &&DO_OP_JMP, &&DO_OP_POP, &&DO_OP_GET_GLOBAL,
+    &&DO_OP_SET_GLOBAL, &&DO_OP_GET_LOCAL, &&DO_OP_SET_LOCAL, &&DO_OP_SCOPE_EXIT, &&DO_OP_CALL, &&DO_OP_RETURN, &&DO_OP_GET_MEMBER};
+
+    // TODO: Put this shit in dispatch macro
+    // Introspect stack for debugging
+    // VM_DumpStack(vm, opcode);
+
+    #define DISPATCH()                          \
+    do {                                        \
+        goto *dispatch_table[VM_Read_Byte(vm)]; \
+    } while (false)                             \
+
+    #define BINARY_OP(operation)                \
     do {                                        \
         float64 op2 = VM_Stack_Pop(vm).number;  \
         float64 op1 = VM_Stack_Pop(vm).number;  \
@@ -537,292 +559,291 @@ RuntimeValue VM_exec(VM* vm, Program* global){
         VM_Stack_Push(vm, &NUMBER(result));     \
     } while (false)                             \
 
+    DISPATCH();
 
-RuntimeValue VM_Eval(VM* vm, Program* global){
-    int64 t1 = timestamp();
+    DO_OP_HALT: {
+        int64 t2 = timestamp();
+        printf("Execution time: %d ms\n", t2/1000-t1/1000);
+        return VM_Stack_Pop(vm);
+    }
 
-    while(true){
-        uint8_t opcode = VM_Read_Byte(vm);
+    DO_OP_CONST: {
+        uint64_t constIndex = VM_Read_Address(vm);
+        RuntimeValue constant = vm->fn->constants[constIndex];
+        VM_Stack_Push(vm, &constant);
 
-        // Introspect stack for debugging
-        //VM_DumpStack(vm, opcode);
+        DISPATCH();
+    }
 
-        switch (opcode)
+    DO_OP_ADD: {
+        RuntimeValue op2 = VM_Stack_Pop(vm);
+        RuntimeValue op1 = VM_Stack_Pop(vm);
+
+        if(op1.type == ValueType_Number && op2.type == ValueType_Number)
         {
-            case OP_HALT:{
-                int64 t2 = timestamp();
-                printf("Execution time: %d ms\n", t2/1000-t1/1000);
-                return VM_Stack_Pop(vm); 
-            }     
+            float64 result = op1.number + op2.number;
 
-            case OP_CONST: {
-                uint64_t constIndex = VM_Read_Address(vm);
-                RuntimeValue constant = vm->fn->constants[constIndex];
-                VM_Stack_Push(vm, &constant);
+            VM_Stack_Push(vm, &NUMBER(result));
 
-                break;
-            }
-
-            case OP_POP:{
-                VM_Stack_Pop(vm);
-
-                break;
-            }
-
-            case OP_ADD: {
-                RuntimeValue op2 = VM_Stack_Pop(vm);
-                RuntimeValue op1 = VM_Stack_Pop(vm);
-
-                if(op1.type == ValueType_Number && op2.type == ValueType_Number){
-                    float64 result = op1.number + op2.number;
-
-                    VM_Stack_Push(vm, &NUMBER(result));
-
-                    break;
-                }
-                else if(op1.type == ValueType_Object && op1.object->objectType == ObjectType_String
-                     && op2.type == ValueType_Object && op2.object->objectType == ObjectType_String){
-                    
-                    StringObject str1 = AS_STRING(op1);
-                    StringObject str2 = AS_STRING(op2);
-                    RuntimeValue value = Alloc_String_Combine(&str1, &str2);
-
-                    VM_Stack_Push(vm, &value);
-
-                    break;
-                }
-
-                VM_Exception("Illegal add operation.");
-            }
-
-            case OP_SUB: BINARY_OP(-); break;
-            case OP_MUL: BINARY_OP(*); break;
-            case OP_DIV: BINARY_OP(/); break;
-            
-            case OP_CMP:{
-                uint8_t cmp_type = VM_Read_Byte(vm);
-
-                RuntimeValue op2 = VM_Stack_Pop(vm);
-                RuntimeValue op1 = VM_Stack_Pop(vm);
-                bool res;
-
-                if(op2.type == ValueType_Number && op1.type == ValueType_Number)
-                {
-                    switch (cmp_type)
-                    {
-                        case OP_CMP_GT:
-                            res = op1.number > op2.number;
-                            break;
-                        case OP_CMP_LT:
-                            res = op1.number < op2.number;
-                            break;
-                        case OP_CMP_EQ:
-                            res = op1.number == op2.number;
-                            break;
-                        case OP_CMP_GE:
-                            res = op1.number >= op2.number;
-                            break;
-                        case OP_CMP_LE:
-                            res = op1.number <= op2.number;
-                            break;
-                        case OP_CMP_NE:
-                            res = op1.number != op2.number;
-                            break;
-                        default:
-                            VM_Exception("Illegal comparison.");
-                    }  
-                }
-                else if(op2.type == ValueType_Boolean && op1.type == ValueType_Boolean)
-                {
-                    switch (cmp_type)
-                    {
-                        case OP_CMP_EQ:
-                            res = op1.boolean == op2.boolean;
-                            break;
-                        case OP_CMP_NE:
-                            res = op1.boolean != op2.boolean;
-                            break;
-                        default:
-                            VM_Exception("Illegal comparison.");
-                    }  
-                }
-                else if(op1.type == ValueType_Object && op1.object->objectType == ObjectType_String
-                     && op2.type == ValueType_Object && op2.object->objectType == ObjectType_String)
-                {
-                    StringObject str1 = AS_STRING(op1);
-                    StringObject str2 = AS_STRING(op2);
-
-                    switch (cmp_type)
-                    {
-                        case OP_CMP_EQ:
-                            res = strcmp(str1.string, str2.string) == 0;
-                            break;
-                        case OP_CMP_NE:
-                            res = strcmp(str1.string, str2.string) != 0;
-                            break;
-                        default:
-                            VM_Exception("Illegal comparison.");
-                    }  
-                }
-                else if(op2.type == ValueType_Null || op1.type == ValueType_Null)
-                {
-                    switch (cmp_type)
-                    {
-                        case OP_CMP_EQ:
-                            res = op2.type == ValueType_Null && op1.type == ValueType_Null;
-                            break;
-                        case OP_CMP_NE:
-                            res = op2.type != ValueType_Null || op1.type != ValueType_Null;
-                            break;
-                        default:
-                            VM_Exception("Illegal comparison.");
-                    }  
-                }
-                else{
-                    VM_Exception("Illegal comparison.");
-                }
-
-                VM_Stack_Push(vm, &BOOLEAN(res));
-
-                break;
-            }
-            case OP_JMP_IF_FALSE:{
-                bool condition = VM_Stack_Pop(vm).boolean;
-                uint64_t address = VM_Read_Address(vm);
-
-                if(!condition){
-                    vm->ip = &vm->fn->code[address];
-                }
-
-                break;
-            }
-            case OP_JMP:{
-                uint64_t address = VM_Read_Address(vm);
-                vm->ip = &vm->fn->code[address];
-
-                break;
-            }
-
-            case OP_GET_GLOBAL:{
-                int64 address = VM_Read_Address(vm);
-                RuntimeValue value = Global_Get(global, address).value;
-                VM_Stack_Push(vm, &value);
-
-                break;
-            }
-
-            case OP_SET_GLOBAL:{
-                int64 index = VM_Read_Address(vm);
-                RuntimeValue value = VM_Stack_Peek(vm, 0);
-                Global_Set(global, index, &value);
-
-                break;
-            }
-
-            case OP_GET_LOCAL:{
-                uint64 address = VM_Read_Address(vm);
-                if(address < 0 ){ 
-                    VM_Exception("Invalid variable index.");
-                }
-
-                VM_Stack_Push(vm, &vm->bp[address]);
-
-                break;
-            }
-
-            case OP_SET_LOCAL:{
-                int64 index = VM_Read_Address(vm);
-                RuntimeValue value = VM_Stack_Peek(vm, 0);
-                vm->bp[index] = value;
-
-                break;
-            }
-
-            case OP_GET_MEMBER: {
-                RuntimeValue instanceVal = VM_Stack_Pop(vm);
-                TypeInstanceObject instance = AS_TYPEINSTANCE(instanceVal);
-                int64 memberIndex = VM_Read_Address(vm);
-
-                RuntimeValue memberValue = Member_Get(&instance, memberIndex).value;
-                VM_Stack_Push(vm, &memberValue);
-                int iasd = 0;
-
-                break;
-            }
-
-            case OP_SCOPE_EXIT:{
-                uint64 count = VM_Read_Address(vm);
-
-                if(count > 0){
-                    // Move the result above the vars that is getting popped
-                    *(vm->sp - 1 - count) = VM_Stack_Peek(vm, 0);
-
-                    // Pop back to before scope
-                    vm->sp -= count;
-                }
-                break;
-            }
-
-            case OP_CALL:{
-                uint64_t arg_count = VM_Read_Address(vm);
-                RuntimeValue fnValue = VM_Stack_Pop(vm);
-
-                if(fnValue.type == ValueType_Object && fnValue.object->objectType == ObjectType_NativeFunction){
-                    NativeFunctionObject fn = AS_NATIVE_FUNCTION(fnValue);
-
-                    RuntimeValue args[arg_count];
-
-                    for (size_t i = 0; i < arg_count; i++)
-                    {
-                        args[i] = VM_Stack_Pop(vm);
-                    }
-
-                    RuntimeValue (*fun_ptr)() = fn.func_ptr; // Function pointer
-                    RuntimeValue res = (*fun_ptr)(arg_count, &args); // Invoke
-                    
-                    VM_Stack_Push(vm, &res); // Push the result
-                }
-                else{
-                    FunctionObject* fn = (FunctionObject*)(fnValue.object);
-
-                    // save execution context, restored on OP_RETURN
-                    Frame fr = {
-                        .bp = vm->bp,
-                        .fn = vm->fn,
-                        .ra = vm->ip
-                    };
-                    *vm->csp = fr;
-                    vm->csp++;
-
-                    // Set function on vm
-                    vm->fn = fn;
-
-                    // set base pointer (frame) to the call
-                    vm->bp = vm->sp - arg_count;
-
-                    // Jump to the function code
-                    vm->ip = &fn->code[0];
-                }
-
-                break;
-            }
-
-            case OP_RETURN: {
-                // restore frame
-                vm->csp--;
-                vm->ip = vm->csp->ra;
-                vm->bp = vm->csp->bp;
-                vm->fn = vm->csp->fn;
-                
-                break;
-            }
-
-            default: {
-                printf("\033[0;31mVM Error. Unrecognized opcode: %#x \033[0m\n", opcode);
-                exit(0);
-            }
-
+            DISPATCH();
         }
+        else if(op1.type == ValueType_Object && op1.object->objectType == ObjectType_String
+             && op2.type == ValueType_Object && op2.object->objectType == ObjectType_String)
+        { 
+            StringObject str1 = AS_STRING(op1);
+            StringObject str2 = AS_STRING(op2);
+            RuntimeValue value = Alloc_String_Combine(&str1, &str2);
+
+            VM_Stack_Push(vm, &value);
+
+            DISPATCH();
+        }
+
+        VM_Exception("Illegal add operation.");
+    }
+
+    DO_OP_SUB: {
+        BINARY_OP(-);
+        DISPATCH();
+    }
+
+    DO_OP_MUL: {
+        BINARY_OP(*);
+        DISPATCH();
+    }
+
+    DO_OP_DIV: {
+        BINARY_OP(/);
+        DISPATCH();
+    }
+
+    DO_OP_CMP: {
+        uint8_t cmp_type = VM_Read_Byte(vm);
+
+        RuntimeValue op2 = VM_Stack_Pop(vm);
+        RuntimeValue op1 = VM_Stack_Pop(vm);
+        bool res;
+
+        if(op2.type == ValueType_Number && op1.type == ValueType_Number)
+        {
+            switch (cmp_type)
+            {
+                case OP_CMP_GT:
+                    res = op1.number > op2.number;
+                    break;
+                case OP_CMP_LT:
+                    res = op1.number < op2.number;
+                    break;
+                case OP_CMP_EQ:
+                    res = op1.number == op2.number;
+                    break;
+                case OP_CMP_GE:
+                    res = op1.number >= op2.number;
+                    break;
+                case OP_CMP_LE:
+                    res = op1.number <= op2.number;
+                    break;
+                case OP_CMP_NE:
+                    res = op1.number != op2.number;
+                    break;
+                default:
+                    VM_Exception("Illegal comparison.");
+            }  
+        }
+        else if(op2.type == ValueType_Boolean && op1.type == ValueType_Boolean)
+        {
+            switch (cmp_type)
+            {
+                case OP_CMP_EQ:
+                    res = op1.boolean == op2.boolean;
+                    break;
+                case OP_CMP_NE:
+                    res = op1.boolean != op2.boolean;
+                    break;
+                default:
+                    VM_Exception("Illegal comparison.");
+            }  
+        }
+        else if(op1.type == ValueType_Object && op1.object->objectType == ObjectType_String
+             && op2.type == ValueType_Object && op2.object->objectType == ObjectType_String)
+        {
+            StringObject str1 = AS_STRING(op1);
+            StringObject str2 = AS_STRING(op2);
+
+            switch (cmp_type)
+            {
+                case OP_CMP_EQ:
+                    res = strcmp(str1.string, str2.string) == 0;
+                    break;
+                case OP_CMP_NE:
+                    res = strcmp(str1.string, str2.string) != 0;
+                    break;
+                default:
+                    VM_Exception("Illegal comparison.");
+            }  
+        }
+        else if(op2.type == ValueType_Null || op1.type == ValueType_Null)
+        {
+            switch (cmp_type)
+            {
+                case OP_CMP_EQ:
+                    res = op2.type == ValueType_Null && op1.type == ValueType_Null;
+                    break;
+                case OP_CMP_NE:
+                    res = op2.type != ValueType_Null || op1.type != ValueType_Null;
+                    break;
+                default:
+                    VM_Exception("Illegal comparison.");
+            }  
+        }
+        else 
+        {
+            VM_Exception("Illegal comparison.");
+        }
+
+        VM_Stack_Push(vm, &BOOLEAN(res));
+
+        DISPATCH();
+    }
+
+    DO_OP_JMP_IF_FALSE: {
+        bool condition = VM_Stack_Pop(vm).boolean;
+        uint64_t address = VM_Read_Address(vm);
+
+        if(!condition){
+            vm->ip = &vm->fn->code[address];
+        }
+    
+        DISPATCH();
+    }
+
+    DO_OP_JMP: {
+        uint64_t address = VM_Read_Address(vm);
+        vm->ip = &vm->fn->code[address];
+
+        DISPATCH();
+    }
+
+    DO_OP_POP: {
+        VM_Stack_Pop(vm);
+
+        DISPATCH();
+    }
+
+    DO_OP_GET_GLOBAL: {
+        int64 address = VM_Read_Address(vm);
+        RuntimeValue value = Global_Get(global, address).value;
+        VM_Stack_Push(vm, &value);
+
+        DISPATCH();
+    }
+
+    DO_OP_SET_GLOBAL: {
+        int64 index = VM_Read_Address(vm);
+        RuntimeValue value = VM_Stack_Peek(vm, 0);
+        Global_Set(global, index, &value);
+
+        DISPATCH();
+    }
+
+    DO_OP_GET_LOCAL: {
+        uint64 address = VM_Read_Address(vm);
+        if(address < 0 ){ 
+            VM_Exception("Invalid variable index.");
+        }
+
+        VM_Stack_Push(vm, &vm->bp[address]);
+
+        DISPATCH();
+    }
+
+    DO_OP_SET_LOCAL: {
+        int64 index = VM_Read_Address(vm);
+        RuntimeValue value = VM_Stack_Peek(vm, 0);
+        vm->bp[index] = value;
+
+        DISPATCH();
+    }
+
+    DO_OP_SCOPE_EXIT: {
+        uint64 count = VM_Read_Address(vm);
+
+        if(count > 0)
+        {
+            // Move the result above the vars that is getting popped
+            *(vm->sp - 1 - count) = VM_Stack_Peek(vm, 0);
+
+            // Pop back to before scope
+            vm->sp -= count;
+        }
+
+        DISPATCH();
+    }
+
+    DO_OP_CALL: {
+        uint64_t arg_count = VM_Read_Address(vm);
+        RuntimeValue fnValue = VM_Stack_Pop(vm);
+
+        if(fnValue.type == ValueType_Object && fnValue.object->objectType == ObjectType_NativeFunction){
+            NativeFunctionObject fn = AS_NATIVE_FUNCTION(fnValue);
+
+            RuntimeValue args[arg_count];
+
+            for (size_t i = 0; i < arg_count; i++)
+            {
+                args[i] = VM_Stack_Pop(vm);
+            }
+
+            RuntimeValue (*fun_ptr)() = fn.func_ptr; // Function pointer
+            RuntimeValue res = (*fun_ptr)(arg_count, &args); // Invoke
+            
+            VM_Stack_Push(vm, &res); // Push the result
+        }
+        else
+        {
+            FunctionObject* fn = (FunctionObject*)(fnValue.object);
+
+            // Save execution context, restored on OP_RETURN
+            Frame fr = {
+                .bp = vm->bp,
+                .fn = vm->fn,
+                .ra = vm->ip
+            };
+            *vm->csp = fr;
+            vm->csp++;
+
+            // Set function on vm
+            vm->fn = fn;
+
+            // set base pointer (frame) to the call
+            vm->bp = vm->sp - arg_count;
+
+            // Jump to the function code
+            vm->ip = &fn->code[0];
+        }
+
+        DISPATCH();
+    }
+
+    DO_OP_RETURN: {
+        // Restore frame
+        vm->csp--;
+        vm->ip = vm->csp->ra;
+        vm->bp = vm->csp->bp;
+        vm->fn = vm->csp->fn;
+
+        DISPATCH();
+    }
+
+    DO_OP_GET_MEMBER: {
+        RuntimeValue instanceVal = VM_Stack_Pop(vm);
+        TypeInstanceObject instance = AS_TYPEINSTANCE(instanceVal);
+        int64 memberIndex = VM_Read_Address(vm);
+
+        RuntimeValue memberValue = Member_Get(&instance, memberIndex).value;
+        VM_Stack_Push(vm, &memberValue);
+
+        DISPATCH();
     }
 }
 
