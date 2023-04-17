@@ -11,7 +11,7 @@ void        Emit64(FunctionObject* co, uint64_t value);
 int64       String_Const_Index(FunctionObject* co, char* string);
 bool        Is_Global_Scope(FunctionObject* co);
 size_t      locals_in_scope(FunctionObject* co);
-void        emit_return(FunctionObject* co, Program* global);
+void        emit_return(FunctionObject* co, Program* global, uint64_t vars_declared_in_scope);
 
 RuntimeValue Create_CodeObjectValue(char* name, size_t arity, Program* global){
     RuntimeValue value = Alloc_Code(name, arity);
@@ -73,14 +73,18 @@ void Gen(FunctionObject* co, AstNode* statement, Program* global){
             Gen(co, (AstNode*)expression.value, global);
 
             // Since we quit the whole function we exit scope with all locals in function
-            uint64 vars_declared_in_scope_count = array_length(co->locals);
+            // TODO: This should probably be all locals in current scope or lower?
+            uint64_t vars_declared_in_scope_count = array_length(co->locals);
             
-            if(vars_declared_in_scope_count > 0 || co->arity > 0){
-                Emit(co, OP_SCOPE_EXIT);
-                Emit64(co, vars_declared_in_scope_count);
-            }
+            // if((vars_declared_in_scope_count > 0 || co->arity > 0) && global->main_fn != co){
+            //     Emit(co, OP_SCOPE_EXIT);
+            //     Emit64(co, vars_declared_in_scope_count);
+            // }
 
-            emit_return(co, global);
+            // If we are returning a value we need to pop the expression result as well
+            uint64_t pop_expr_result = expression.value ? 1 : 0; 
+
+            emit_return(co, global, vars_declared_in_scope_count + pop_expr_result);
 
             break;
         }
@@ -264,8 +268,10 @@ void Gen(FunctionObject* co, AstNode* statement, Program* global){
 
             // Here goes cleanup if we add functions without block as body
 
+            // This is for implicit return
             // ! Do not emit return if previous instruction was explicit return
-            emit_return(new_co, global);
+            // TODO: Pass number of top level var declarations here (maybe not? They should be popped by scope exit)
+            emit_return(new_co, global, 0);
 
             break;
         }
@@ -483,12 +489,13 @@ size_t locals_in_scope(FunctionObject* co){
     return vars_declared_in_scope;
 }
 
-void emit_return(FunctionObject* co, Program* global){
+void emit_return(FunctionObject* co, Program* global, uint64_t vars_declared_in_scope){
     if(co == global->main_fn){
         Emit(co, OP_HALT);
     }
     else{
         Emit(co, OP_RETURN);
+        Emit64(co, vars_declared_in_scope);
     }
 }
 
@@ -659,6 +666,12 @@ size_t offset = 0;
         }
 
         if(opcode == OP_SCOPE_EXIT){
+            printf("%-7u", args);
+            // printf("(%s)", Global_Get(global, args).name);
+            offset += 8;
+        }
+
+        if(opcode == OP_RETURN){
             printf("%-7u", args);
             // printf("(%s)", Global_Get(global, args).name);
             offset += 8;

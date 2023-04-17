@@ -452,16 +452,14 @@ int64 Local_GetIndex(FunctionObject* co, char* name){
 }
 
 void Local_Define(FunctionObject* co, char* name){
-    if(strcmp("si", name) == 0){
-        int asd = 0;
-    }
 
-    int64 index = Local_GetIndex(co, name);
+    // TODO: den här ska hämta med strikt scope
+    // int64 index = Local_GetIndex(co, name);
 
-    if(index != -1)
-    {
-        return;
-    }
+    // if(index != -1)
+    // {
+    //     return;
+    // }
 
     LocalVar var;
     var.scope_level = co->scope_level;
@@ -469,6 +467,8 @@ void Local_Define(FunctionObject* co, char* name){
     var.value = RUNTIME_NULL();
 
     array_push(co->locals, var);
+
+    return;
 }
 
 LocalVar Local_Get(FunctionObject* co, int64 index){
@@ -501,8 +501,8 @@ LocalVar Local_Get(FunctionObject* co, int64 index){
 #define OP_JMP              0x08
 #define OP_POP              0x09
 #define OP_GET_GLOBAL       0x0A
-#define OP_SET_GLOBAL       11
-#define OP_GET_LOCAL        12
+#define OP_SET_GLOBAL       0x0B
+#define OP_GET_LOCAL        0x0C
 #define OP_SET_LOCAL        13
 #define OP_SCOPE_EXIT       14
 #define OP_CALL             15
@@ -545,10 +545,13 @@ RuntimeValue vm_interp(VM* vm, Program* global)
     // TODO: Put this shit in dispatch macro
     // Introspect stack for debugging
     // VM_DumpStack(vm, opcode);
+    uint8_t opcode;
 
-    #define DISPATCH()                          \
-    do {                                        \
-        goto *dispatch_table[VM_Read_Byte(vm)]; \
+    #define DISPATCH()                                   \
+    do {                                                 \
+         /* Introspect stack for debugging */            \
+         /* VM_DumpStack(vm, opcode); */                 \
+        goto *dispatch_table[opcode = VM_Read_Byte(vm)]; \
     } while (false)                             \
 
     #define BINARY_OP(operation)                \
@@ -771,10 +774,12 @@ RuntimeValue vm_interp(VM* vm, Program* global)
         if(count > 0)
         {
             // Move the result above the vars that is getting popped
-            *(vm->sp - 1 - count) = VM_Stack_Peek(vm, 0);
+            // TODO: Borde bara vara så här för ett block som returerar
+
+            //*(vm->sp - count) = VM_Stack_Peek(vm, 0);
 
             // Pop back to before scope
-            vm->sp -= count;
+            vm->sp -= (count); //  - 1
         }
 
         DISPATCH();
@@ -826,6 +831,19 @@ RuntimeValue vm_interp(VM* vm, Program* global)
     }
 
     DO_OP_RETURN: {
+        uint64 count = VM_Read_Address(vm);
+
+        if(count > 0)
+        {
+            // Move the result above the vars that is getting popped
+            // TODO: Borde bara vara så här för ett block som returerar
+
+            *(vm->sp - count) = VM_Stack_Peek(vm, 0);
+
+            // Pop back to before scope
+            vm->sp -= (count - 1); //  
+        }
+
         // Restore frame
         vm->csp--;
         vm->ip = vm->csp->ra;

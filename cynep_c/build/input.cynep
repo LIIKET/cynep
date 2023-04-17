@@ -37,9 +37,9 @@ func main(){
 	var apa2 = "Hello" + " Figaro, cigaro!"; 
 
     var asd = add(1, 5);
-    var asdgg = add(1, 2);
+    var asdgg = add(2, 2);
 	
-	var apa1 = multiply(1, 3);
+	var apa1 = multiply(2, 3);
 
-	return apa2;
+	return apa1;
 }
