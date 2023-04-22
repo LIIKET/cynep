@@ -76,8 +76,6 @@ int main(int argc, char**argv)
     program_add_native_function(global, "multiply", &Multiply, 2);
     program_add_native_function(global, "alloc", &Alloc, 1);
 
-
-
     // Compile
     Compile((AstNode*)program, global);
 

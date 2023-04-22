@@ -304,7 +304,7 @@ void Gen(FunctionObject* co, AstNode* statement, Program* global){
             if(!Is_Global_Scope(co)){
 
                 // We need to pop all vars declared in this scope from the stack.
-                // ! dont emit this is previous instruction was explicit return
+                // TODO: Do not emit this if previous instruction was an explicit return
                 uint64 vars_declared_in_scope_count = locals_in_scope(co);
 
                 //co->locals_size -= vars_declared_in_scope_count;

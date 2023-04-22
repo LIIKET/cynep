@@ -1,6 +1,5 @@
 #pragma once
 
-
 typedef enum ValueType ValueType;
 typedef enum ObjectType ObjectType;
 
@@ -15,7 +14,6 @@ typedef struct LocalVar LocalVar;
 typedef struct TypeInstanceObject TypeInstanceObject;
 typedef struct MemberVar MemberVar;
 typedef struct NativeFunctionObject NativeFunctionObject;
-// typedef struct FunctionObject FunctionObject;
 typedef struct TypeInfoObject TypeInfoObject;
 typedef struct MemberInfo MemberInfo;
 typedef struct Frame Frame;

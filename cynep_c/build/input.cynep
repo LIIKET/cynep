@@ -1,45 +1,12 @@
 var i = 0;
 
-type player = {
-	positionx;
-	positiony;
-}
-
-func add(arg1, arg2) {
-    var result = arg1 + arg2;
-
-    if(arg1 == 2){
-        return 13;
-    }
-
-    return 1 + arg2;
-}
-
 func main(){
-	// This is a one line test comment.
-	var division = 9 / 3;
-    var obj = alloc(player);
-    var res = obj.positiony;
+    var b = " Figaro, cigaro!";
 
     while(i < 500000){
-        i = i + 1;
-        var asd = add(1, 2);
-        
-		var a = "Hello" + " Figaro, cigaro!"; 
-		
-		var test = obj;
+        i = i + 1;       
+		var a = "Hello" + b; 
     }
 
-    if(100 > 50){
-        var a = "Hello" + " Figaro, cigaro!"; 
-    }
-	
-	var apa2 = "Hello" + " Figaro, cigaro!"; 
-
-    var asd = add(1, 5);
-    var asdgg = add(2, 2);
-	
-	var apa1 = multiply(2, 3);
-
-	return apa1;
+	return i;
 }
