@@ -41,17 +41,17 @@ RuntimeValue Multiply(size_t argc, RuntimeValue* argv){
     RuntimeValue arg1 = argv[0];
     RuntimeValue arg2 = argv[1];
 
-    printf("NATIVE CALL: %f\n", arg2.number);
+    // printf("NATIVE CALL: %f\n", arg2.number);
 
-    float64 result = arg1.number * arg2.number;
+    // float64 result = arg1.number * arg2.number;
 
-    return NUMBER(result);
+    return arg1;
 }
 
 RuntimeValue Alloc(size_t argc, RuntimeValue* argv){
 
     RuntimeValue arg1 = argv[0];
-    TypeInfoObject* asd = (TypeInfoObject*)arg1.object;
+    TypeInfoObject* asd = (TypeInfoObject*)AS_C_OBJ(arg1);
     RuntimeValue instance = Alloc_TypeInstance(asd);
 
     return instance;
@@ -72,7 +72,7 @@ int main(int argc, char**argv)
 
     // Setup global object
     Program* global = make_program();
-    program_add_global(global, "VERSION", NUMBER(0.1));
+    program_add_global(global, "VERSION", NUMBER_VAL(0.1));
     program_add_native_function(global, "multiply", &Multiply, 2);
     program_add_native_function(global, "alloc", &Alloc, 1);
 

@@ -9,7 +9,7 @@ void        Write_Address_At_Offset(FunctionObject* co, size_t offset, uint64_t 
 // void     Write_Byte_At_Offset(CodeObject* co, size_t offset, uint8_t value);
 void        Emit64(FunctionObject* co, uint64_t value);
 int64       String_Const_Index(FunctionObject* co, char* string);
-bool        Is_Global_Scope(FunctionObject* co);
+bool        is_global_scope(FunctionObject* co);
 size_t      locals_in_scope(FunctionObject* co);
 void        emit_return(FunctionObject* co, Program* global, uint64_t vars_declared_in_scope);
 
@@ -32,10 +32,6 @@ void Compile(AstNode* statement, Program* global){
     global->code_objects= malloc(sizeof(void*) * 100); // TODO: DANGER! Handle memory! Crashes if too many functions
 
     int64 compile_begin = timestamp();
-
-    program_add_global(global, "null", RUNTIME_NULL());
-    program_add_global(global, "true", BOOLEAN(true));
-    program_add_global(global, "false", BOOLEAN(false));
 
     Gen(NULL, statement, global);
 
@@ -176,7 +172,7 @@ void Gen(FunctionObject* co, AstNode* statement, Program* global){
             TypeDeclaration typeDeclaration = *(TypeDeclaration*)statement;
 
             RuntimeValue typeInfoValue = Alloc_TypeInfo(&typeDeclaration);
-            TypeInfoObject* typeInfo = (TypeInfoObject*)typeInfoValue.object;
+            TypeInfoObject* typeInfo = (TypeInfoObject*)AS_C_OBJ(typeInfoValue);
 
             MemberInfo asd = typeInfo->members[0];
 
@@ -281,7 +277,7 @@ void Gen(FunctionObject* co, AstNode* statement, Program* global){
 
             // Scope begin
             uint8_t saved_scope = 0;
-            if(!Is_Global_Scope(co)){
+            if(!is_global_scope(co)){
                 saved_scope = co->scope_level;
                 co->scope_level++;
             }
@@ -301,7 +297,7 @@ void Gen(FunctionObject* co, AstNode* statement, Program* global){
             }
 
             // Scope exit
-            if(!Is_Global_Scope(co)){
+            if(!is_global_scope(co)){
 
                 // We need to pop all vars declared in this scope from the stack.
                 // TODO: Do not emit this if previous instruction was an explicit return
@@ -318,8 +314,6 @@ void Gen(FunctionObject* co, AstNode* statement, Program* global){
 
                 co->scope_level = saved_scope;
             }
-
-            
 
             break;
         }
@@ -373,7 +367,7 @@ void Gen(FunctionObject* co, AstNode* statement, Program* global){
         case AST_VariableDeclaration: {
             VariableDeclaration variableDeclaration = *(VariableDeclaration*)statement;
 
-            if(Is_Global_Scope(co))
+            if(is_global_scope(co))
             { 
                 program_define_global(global, variableDeclaration.name); // This should return index directly
                 // TODO: We need to set global value here. Needs to be numericliteral or stringliteral.
@@ -469,7 +463,7 @@ void Gen(FunctionObject* co, AstNode* statement, Program* global){
     }
 }
 
-bool Is_Global_Scope(FunctionObject* co){
+bool is_global_scope(FunctionObject* co){
     return co == NULL;
 }
 
@@ -499,18 +493,18 @@ void emit_return(FunctionObject* co, Program* global, uint64_t vars_declared_in_
     }
 }
 
-size_t Numeric_Const_Index(FunctionObject* co, float64 value){
+size_t Numeric_Const_Index(FunctionObject* co, double value){
     for (size_t i = 0; i < array_length(co->constants); i++)
     {
-        if(co->constants[i].type != ValueType_Number){
+        if(!IS_NUMBER(co->constants[i])){
             continue;
         }
-        if(co->constants[i].number == value){
+        if(AS_C_DOUBLE(co->constants[i]) == value){
             return i;
         }
     }
 
-    array_push(co->constants, NUMBER(value));
+    array_push(co->constants, NUMBER_VAL(value));
 
     return array_length(co->constants) - 1; 
 }
@@ -518,11 +512,11 @@ size_t Numeric_Const_Index(FunctionObject* co, float64 value){
 int64 String_Const_Index(FunctionObject* co, char* string){
     for (size_t i = 0; i < array_length(co->constants); i++)
     {
-        if(co->constants[i].type != ValueType_Object){
+        if(!IS_OBJ(co->constants[i])){
             continue;
         }
 
-        StringObject* strObj = (StringObject*)co->constants[i].object;
+        StringObject* strObj = (StringObject*)AS_C_OBJ(co->constants[i]);
 
         if(strcmp(string, strObj->string) == 0){
             return i;

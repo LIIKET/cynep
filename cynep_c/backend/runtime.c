@@ -1,22 +1,21 @@
 #pragma once
 
-typedef enum ValueType ValueType;
-typedef enum ObjectType ObjectType;
-
-typedef struct VM VM;
-typedef struct RuntimeValue RuntimeValue;
-typedef struct Object Object;
-typedef struct StringObject StringObject;
-typedef struct FunctionObject FunctionObject;
-typedef struct GlobalVar GlobalVar;
-typedef struct Program Program;
-typedef struct LocalVar LocalVar;
-typedef struct TypeInstanceObject TypeInstanceObject;
-typedef struct MemberVar MemberVar;
-typedef struct NativeFunctionObject NativeFunctionObject;
-typedef struct TypeInfoObject TypeInfoObject;
-typedef struct MemberInfo MemberInfo;
-typedef struct Frame Frame;
+typedef enum        ValueType ValueType;
+typedef enum        ObjectType ObjectType;
+typedef uint64_t    RuntimeValue;
+typedef struct      VM VM;
+typedef struct      Object Object;
+typedef struct      StringObject StringObject;
+typedef struct      FunctionObject FunctionObject;
+typedef struct      GlobalVar GlobalVar;
+typedef struct      Program Program;
+typedef struct      LocalVar LocalVar;
+typedef struct      TypeInstanceObject TypeInstanceObject;
+typedef struct      MemberVar MemberVar;
+typedef struct      NativeFunctionObject NativeFunctionObject;
+typedef struct      TypeInfoObject TypeInfoObject;
+typedef struct      MemberInfo MemberInfo;
+typedef struct      Frame Frame;
 
 RuntimeValue    vm_interp(VM* vm, Program* global);
 RuntimeValue    VM_Stack_Peek(VM* vm, size_t offset);
@@ -24,7 +23,7 @@ RuntimeValue    VM_Stack_Pop(VM* vm);
 uint8_t         VM_Read_Byte(VM* vm);
 uint8_t         VM_Peek_Byte(VM* vm);
 uint64_t        VM_Read_Address(VM* vm);
-void            VM_Stack_Push(VM* vm, RuntimeValue* value);
+void            VM_Stack_Push(VM* vm, RuntimeValue value);
 void            VM_Exception(char* msg);
 void            VM_DumpStack(VM* vm, uint8_t code);
 char*           opcodeToString(uint8_t opcode);
@@ -33,29 +32,12 @@ int64_t         Member_GetIndex(TypeInfoObject* instance, char* name);
 
 #pragma region TYPES
 
-enum ValueType {
-    ValueType_Null,
-    ValueType_Number,
-    ValueType_Boolean,
-    ValueType_Object
-};
-
 enum ObjectType {
     ObjectType_String,
     ObjectType_Code,
     ObjectType_NativeFunction,
     ObjectType_TypeInfo,
     ObjectType_TypeInstance
-};
-
-struct RuntimeValue {
-    ValueType type;
-    union
-    {
-        float64 number;
-        bool boolean;
-        Object* object;
-    };
 };
 
 struct Object {
@@ -151,54 +133,81 @@ struct VM {
 
 #pragma region RUNTIME_VALUE
 
-#define NUMBER(value) (RuntimeValue){.type = ValueType_Number, .number = value}
-#define BOOLEAN(value) (RuntimeValue){.type = ValueType_Boolean, .boolean = value}
-#define RUNTIME_NULL() (RuntimeValue){.type = ValueType_Null }
+#define QUIET_NAN ((uint64_t)0x7ffc000000000000)
+#define SIGN_BIT  ((uint64_t)0x8000000000000000)
+#define TAG_NULL  1
+#define TAG_FALSE 2
+#define TAG_TRUE  3
 
-#define AS_STRING(value) (*(StringObject*)value.object)
-// #define AS_CODE(value) (*(FunctionObject*)value.object)
-#define AS_NATIVE_FUNCTION(value) (*(NativeFunctionObject*)value.object)
-#define AS_TYPEINFO(value) (*(TypeInfoObject*)value.object)
-#define AS_TYPEINSTANCE(value) (*(TypeInstanceObject*)value.object)
-#define AS_FUNCTION(value) (*(FunctionObject*)value.object)
-#define AS_NUMBER(value) (*(float64*)value.number)
-#define AS_BOOLEAN(value) (*(bool*)value.boolean)
+#define NUMBER_VAL(num) (numToValue(num))
+#define FALSE_VAL ((RuntimeValue)(uint64_t)(QUIET_NAN | TAG_FALSE))
+#define TRUE_VAL ((RuntimeValue)(uint64_t)(QUIET_NAN | TAG_TRUE))
+#define NULL_VAL ((RuntimeValue)(uint64_t)(QUIET_NAN | TAG_NULL))
+#define BOOL_VAL(val) ((val) ? TRUE_VAL : FALSE_VAL)
+#define OBJ_VAL(obj) (RuntimeValue)(SIGN_BIT | QUIET_NAN | (uint64_t)(uintptr_t)(obj))
+
+#define IS_NUMBER(value) (((value) & QUIET_NAN) != QUIET_NAN)
+#define IS_NULL(value) ((value) == NULL_VAL)
+#define IS_BOOL(value) (((value) | 1) == TRUE_VAL)
+#define IS_OBJ(value) (((value) & (QUIET_NAN | SIGN_BIT)) == (QUIET_NAN | SIGN_BIT))
+
+#define AS_C_BOOL(value) ((value) == TRUE_VAL)
+#define AS_C_DOUBLE(value) valueToNum(value)
+#define AS_C_OBJ(value) ((Object*)(uintptr_t)((value) & ~(SIGN_BIT | QUIET_NAN)))
+
+#define AS_STRING(value) (*(StringObject*)AS_C_OBJ(value))
+#define AS_NATIVE_FUNCTION(value) (*(NativeFunctionObject*)AS_C_OBJ(value))
+#define AS_TYPEINFO(value) (*(TypeInfoObject*)AS_C_OBJ(value))
+#define AS_TYPEINSTANCE(value) (*(TypeInstanceObject*)AS_C_OBJ(value))
+#define AS_FUNCTION(value) (*(FunctionObject*)AS_C_OBJ(value))
+
+static inline RuntimeValue numToValue(double num){
+    RuntimeValue value;
+    memcpy(&value, &num, sizeof(double));
+    return value;
+}
+
+static inline double valueToNum(RuntimeValue val){
+    double num;
+    memcpy(&num, &val, sizeof(double));
+    return num;
+}
 
 char* RuntimeValue_ToString(RuntimeValue value){
     size_t buff_size = 100; 
     
-    if(value.type == ValueType_Number){
+    if(IS_NUMBER(value)){
         char* buf = malloc(sizeof(char) * buff_size);
-        gcvt(value.number, 6, buf);
+        gcvt(AS_C_DOUBLE(value), 6, buf);
         return buf;
     }
-    if(value.type == ValueType_Boolean){
-        if(value.boolean == true)
+    if(IS_BOOL(value)){
+        if(AS_C_BOOL(value) == true)
             return "true";
         else
             return "false";
     }
-    if(value.type == ValueType_Null){
+    if(IS_NULL(value)){
         return "null";
     }
-    if(value.type == ValueType_Object && value.object->objectType == ObjectType_Code){
+    if(IS_OBJ(value) && AS_C_OBJ(value)->objectType == ObjectType_Code){
         FunctionObject code = AS_FUNCTION(value);
         return code.name;
     }
-    if(value.type == ValueType_Object && value.object->objectType == ObjectType_String){
+    if(IS_OBJ(value) && AS_C_OBJ(value)->objectType == ObjectType_String){
         StringObject str = AS_STRING(value);
         char* buf = malloc(sizeof(char) * buff_size);
         strcpy(buf, str.string);
         return buf;
     }
-    if(value.type == ValueType_Object && value.object->objectType == ObjectType_NativeFunction){
+    if(IS_OBJ(value) && AS_C_OBJ(value)->objectType == ObjectType_NativeFunction){
         return "(Native function)";
     }
-    if(value.type == ValueType_Object && value.object->objectType == ObjectType_TypeInfo){
+    if(IS_OBJ(value) && AS_C_OBJ(value)->objectType == ObjectType_TypeInfo){
         TypeInfoObject typeInfo = AS_TYPEINFO(value);
         return typeInfo.name;
     }
-    if(value.type == ValueType_Object && value.object->objectType == ObjectType_TypeInstance){
+    if(IS_OBJ(value) && AS_C_OBJ(value)->objectType == ObjectType_TypeInstance){
         TypeInstanceObject typeInfo = AS_TYPEINSTANCE(value);
         // char* buf = malloc(sizeof(char) * buff_size);
         // gcvt(typeInfo.members[0].value.number, 6, buf);
@@ -211,13 +220,13 @@ char* RuntimeValue_ToString(RuntimeValue value){
 
 RuntimeValue Alloc_String(char* value){
     RuntimeValue result;
-    result.type = ValueType_Object;
 
     StringObject* stringObject = malloc(sizeof(StringObject));
 
     stringObject->object.objectType = ObjectType_String;
     stringObject->string = malloc(strlen(value) * sizeof(char) + 1);
-    result.object = (Object*)stringObject;
+
+    result = OBJ_VAL(stringObject);
     
     strcpy(stringObject->string, value);
 
@@ -226,7 +235,6 @@ RuntimeValue Alloc_String(char* value){
 
 RuntimeValue Alloc_NativeFunction(void* func, char* name, size_t arity){
     RuntimeValue result;
-    result.type = ValueType_Object;
 
     NativeFunctionObject* nativeFunctionObject = malloc(sizeof(NativeFunctionObject));
 
@@ -235,13 +243,12 @@ RuntimeValue Alloc_NativeFunction(void* func, char* name, size_t arity){
     nativeFunctionObject->func_ptr = func;
     nativeFunctionObject->name = name;
 
-    result.object = (Object*)nativeFunctionObject;
+    result = OBJ_VAL(nativeFunctionObject);
     return result;
 }
 
 RuntimeValue Alloc_String_Combine(StringObject* one, StringObject* two){
     RuntimeValue result;
-    result.type = ValueType_Object;
 
     char* str1 = one->string;
     char* str2 = two->string;
@@ -261,14 +268,14 @@ RuntimeValue Alloc_String_Combine(StringObject* one, StringObject* two){
 
     stringObject->string = string;
 
-    result.object = (Object*)stringObject;
+    result = OBJ_VAL(stringObject);
     
     return result;
 }
 
 RuntimeValue Alloc_Code(char* name, size_t arity){
     RuntimeValue result;
-    result.type = ValueType_Object;
+
 
     FunctionObject* co = malloc(sizeof(FunctionObject));
     co->object.objectType = ObjectType_Code;
@@ -279,14 +286,13 @@ RuntimeValue Alloc_Code(char* name, size_t arity){
     co->scope_level = 0;
     co->arity = arity;
 
-    result.object = (Object*)co;
+    result = OBJ_VAL(co);
     
     return result;
 }
 
 RuntimeValue Alloc_TypeInfo(TypeDeclaration* typeDeclaration){
     RuntimeValue result;
-    result.type = ValueType_Object;
 
     TypeInfoObject* co = malloc(sizeof(TypeInfoObject));
     co->object.objectType = ObjectType_TypeInfo;
@@ -306,14 +312,13 @@ RuntimeValue Alloc_TypeInfo(TypeDeclaration* typeDeclaration){
         cursor = cursor->next;
     }
 
-    result.object = (Object*)co;
+    result = OBJ_VAL(co);
     
     return result;
 }
 
 RuntimeValue Alloc_TypeInstance(TypeInfoObject* typeInfo){
     RuntimeValue result;
-    result.type = ValueType_Object;
 
     TypeInstanceObject* co = malloc(sizeof(TypeInstanceObject));
 
@@ -324,10 +329,10 @@ RuntimeValue Alloc_TypeInstance(TypeInfoObject* typeInfo){
     for (size_t i = 0; i < typeInfo->members_length; i++)
     {
         co->members[i].name = typeInfo->members[i].name;
-        co->members[i].value = NUMBER(789);
+        co->members[i].value = NUMBER_VAL(789);
     }
     
-    result.object = (Object*)co;
+    result = OBJ_VAL(co);
     
     return result;
 }
@@ -388,7 +393,7 @@ void program_define_global(Program* global, char* name)
     GlobalVar* var = &global->globals[global->globals_size++];
     var->name = name;
 
-    var->value = NUMBER(0); // TODO: Set to null
+    var->value = NUMBER_VAL(0); // TODO: Set to null
 }
 
 void program_add_global(Program* global, char* name, RuntimeValue value)
@@ -433,11 +438,11 @@ Program* make_program(){
 
 #pragma region LOCALS
 
-int64 Local_GetIndex(FunctionObject* co, char* name){
+int64_t Local_GetIndex(FunctionObject* co, char* name){
     // We iterate backwards to grab the one with the closest scope level first. (It should be added closer to the end)
     if(array_length(co->locals) > 0)
     {
-        for(int64 i = array_length(co->locals) - 1; i >= 0; i--)
+        for(int64_t i = array_length(co->locals) - 1; i >= 0; i--)
         {
             if(strcmp(name, co->locals[i].name) == 0 )
             {
@@ -462,7 +467,7 @@ void Local_Define(FunctionObject* co, char* name){
     LocalVar var;
     var.scope_level = co->scope_level;
     var.name = name;
-    var.value = RUNTIME_NULL();
+    var.value = NULL_VAL;
 
     array_push(co->locals, var);
 
@@ -540,25 +545,22 @@ RuntimeValue vm_interp(VM* vm, Program* global)
     &&DO_OP_MUL, &&DO_OP_DIV, &&DO_OP_CMP, &&DO_OP_JMP_IF_FALSE, &&DO_OP_JMP, &&DO_OP_POP, &&DO_OP_GET_GLOBAL,
     &&DO_OP_SET_GLOBAL, &&DO_OP_GET_LOCAL, &&DO_OP_SET_LOCAL, &&DO_OP_SCOPE_EXIT, &&DO_OP_CALL, &&DO_OP_RETURN, &&DO_OP_GET_MEMBER};
 
-    // TODO: Put this shit in dispatch macro
-    // Introspect stack for debugging
-    // VM_DumpStack(vm, opcode);
     uint8_t opcode;
 
     #define DISPATCH()                                   \
     do {                                                 \
-         /* Introspect stack for debugging */            \
-         /* VM_DumpStack(vm, opcode); */                 \
+        /* Introspect stack for debugging */             \
+        /* VM_DumpStack(vm, opcode);   */                \
         goto *dispatch_table[opcode = VM_Read_Byte(vm)]; \
-    } while (false)                             \
+    } while (false)                                      \
 
-    #define BINARY_OP(operation)                \
-    do {                                        \
-        float64 op2 = VM_Stack_Pop(vm).number;  \
-        float64 op1 = VM_Stack_Pop(vm).number;  \
-        float64 result = op1 operation op2;     \
-        VM_Stack_Push(vm, &NUMBER(result));     \
-    } while (false)                             \
+    #define BINARY_OP(operation)                         \
+    do {                                                 \
+        double op2 = AS_C_DOUBLE(VM_Stack_Pop(vm));      \
+        double op1 = AS_C_DOUBLE(VM_Stack_Pop(vm));      \
+        double result = op1 operation op2;               \
+        VM_Stack_Push(vm, NUMBER_VAL(result));           \
+    } while (false)                                      \
 
     DISPATCH();
 
@@ -571,7 +573,7 @@ RuntimeValue vm_interp(VM* vm, Program* global)
     DO_OP_CONST: {
         uint64_t constIndex = VM_Read_Address(vm);
         RuntimeValue constant = vm->fn->constants[constIndex];
-        VM_Stack_Push(vm, &constant);
+        VM_Stack_Push(vm, constant);
 
         DISPATCH();
     }
@@ -580,22 +582,23 @@ RuntimeValue vm_interp(VM* vm, Program* global)
         RuntimeValue op2 = VM_Stack_Pop(vm);
         RuntimeValue op1 = VM_Stack_Pop(vm);
 
-        if(op1.type == ValueType_Number && op2.type == ValueType_Number)
+        if(IS_NUMBER(op1) && IS_NUMBER(op2))
         {
-            float64 result = op1.number + op2.number;
+            double result = AS_C_DOUBLE(op1) + AS_C_DOUBLE(op2);
+            RuntimeValue runtime_result = NUMBER_VAL(result);
 
-            VM_Stack_Push(vm, &NUMBER(result));
+            VM_Stack_Push(vm, runtime_result);
 
             DISPATCH();
         }
-        else if(op1.type == ValueType_Object && op1.object->objectType == ObjectType_String
-             && op2.type == ValueType_Object && op2.object->objectType == ObjectType_String)
+        else if(IS_OBJ(op1) && AS_C_OBJ(op1)->objectType == ObjectType_String
+             && IS_OBJ(op2) && AS_C_OBJ(op2)->objectType == ObjectType_String)
         { 
             StringObject str1 = AS_STRING(op1);
             StringObject str2 = AS_STRING(op2);
             RuntimeValue value = Alloc_String_Combine(&str1, &str2);
 
-            VM_Stack_Push(vm, &value);
+            VM_Stack_Push(vm, value);
 
             DISPATCH();
         }
@@ -625,48 +628,48 @@ RuntimeValue vm_interp(VM* vm, Program* global)
         RuntimeValue op1 = VM_Stack_Pop(vm);
         bool res;
 
-        if(op2.type == ValueType_Number && op1.type == ValueType_Number)
+        if(IS_NUMBER(op2) && IS_NUMBER(op1))
         {
             switch (cmp_type)
             {
                 case OP_CMP_GT:
-                    res = op1.number > op2.number;
+                    res = AS_C_DOUBLE(op1) > AS_C_DOUBLE(op2);
                     break;
                 case OP_CMP_LT:
-                    res = op1.number < op2.number;
+                    res = AS_C_DOUBLE(op1) < AS_C_DOUBLE(op2);
                     break;
                 case OP_CMP_EQ:
-                    res = op1.number == op2.number;
+                    res = AS_C_DOUBLE(op1) == AS_C_DOUBLE(op2);
                     break;
                 case OP_CMP_GE:
-                    res = op1.number >= op2.number;
+                    res = AS_C_DOUBLE(op1) >= AS_C_DOUBLE(op2);
                     break;
                 case OP_CMP_LE:
-                    res = op1.number <= op2.number;
+                    res = AS_C_DOUBLE(op1) <= AS_C_DOUBLE(op2);
                     break;
                 case OP_CMP_NE:
-                    res = op1.number != op2.number;
+                    res = AS_C_DOUBLE(op1) != AS_C_DOUBLE(op2);
                     break;
                 default:
                     VM_Exception("Illegal comparison.");
             }  
         }
-        else if(op2.type == ValueType_Boolean && op1.type == ValueType_Boolean)
+        else if(IS_BOOL(op2) && IS_BOOL(op1))
         {
             switch (cmp_type)
             {
                 case OP_CMP_EQ:
-                    res = op1.boolean == op2.boolean;
+                    res = AS_C_BOOL(op1) == AS_C_BOOL(op2);
                     break;
                 case OP_CMP_NE:
-                    res = op1.boolean != op2.boolean;
+                    res = AS_C_BOOL(op1) != AS_C_BOOL(op2);
                     break;
                 default:
                     VM_Exception("Illegal comparison.");
             }  
         }
-        else if(op1.type == ValueType_Object && op1.object->objectType == ObjectType_String
-             && op2.type == ValueType_Object && op2.object->objectType == ObjectType_String)
+        else if(IS_OBJ(op1) && AS_C_OBJ(op1)->objectType == ObjectType_String
+             && IS_OBJ(op2) && AS_C_OBJ(op2)->objectType == ObjectType_String)
         {
             StringObject str1 = AS_STRING(op1);
             StringObject str2 = AS_STRING(op2);
@@ -683,15 +686,15 @@ RuntimeValue vm_interp(VM* vm, Program* global)
                     VM_Exception("Illegal comparison.");
             }  
         }
-        else if(op2.type == ValueType_Null || op1.type == ValueType_Null)
+        else if(IS_NULL(op2) || IS_NULL(op1))
         {
             switch (cmp_type)
             {
                 case OP_CMP_EQ:
-                    res = op2.type == ValueType_Null && op1.type == ValueType_Null;
+                    res = IS_NULL(op2) && IS_NULL(op1);
                     break;
                 case OP_CMP_NE:
-                    res = op2.type != ValueType_Null || op1.type != ValueType_Null;
+                    res = !IS_NULL(op2) || !IS_NULL(op1);
                     break;
                 default:
                     VM_Exception("Illegal comparison.");
@@ -702,13 +705,14 @@ RuntimeValue vm_interp(VM* vm, Program* global)
             VM_Exception("Illegal comparison.");
         }
 
-        VM_Stack_Push(vm, &BOOLEAN(res));
+        RuntimeValue runtime_result = BOOL_VAL(res);
+        VM_Stack_Push(vm, runtime_result);
 
         DISPATCH();
     }
 
     DO_OP_JMP_IF_FALSE: {
-        bool condition = VM_Stack_Pop(vm).boolean;
+        bool condition = AS_C_BOOL(VM_Stack_Pop(vm));
         uint64_t address = VM_Read_Address(vm);
 
         if(!condition){
@@ -734,7 +738,7 @@ RuntimeValue vm_interp(VM* vm, Program* global)
     DO_OP_GET_GLOBAL: {
         int64 address = VM_Read_Address(vm);
         RuntimeValue value = Global_Get(global, address).value;
-        VM_Stack_Push(vm, &value);
+        VM_Stack_Push(vm, value);
 
         DISPATCH();
     }
@@ -753,7 +757,7 @@ RuntimeValue vm_interp(VM* vm, Program* global)
             VM_Exception("Invalid variable index.");
         }
 
-        VM_Stack_Push(vm, &vm->bp[address]);
+        VM_Stack_Push(vm, vm->bp[address]);
 
         DISPATCH();
     }
@@ -787,7 +791,7 @@ RuntimeValue vm_interp(VM* vm, Program* global)
         uint64_t arg_count = VM_Read_Address(vm);
         RuntimeValue fnValue = VM_Stack_Pop(vm);
 
-        if(fnValue.type == ValueType_Object && fnValue.object->objectType == ObjectType_NativeFunction){
+        if(IS_OBJ(fnValue) && AS_C_OBJ(fnValue)->objectType == ObjectType_NativeFunction){
             NativeFunctionObject fn = AS_NATIVE_FUNCTION(fnValue);
 
             RuntimeValue args[arg_count];
@@ -800,11 +804,11 @@ RuntimeValue vm_interp(VM* vm, Program* global)
             RuntimeValue (*fun_ptr)() = fn.func_ptr; // Function pointer
             RuntimeValue res = (*fun_ptr)(arg_count, &args); // Invoke
             
-            VM_Stack_Push(vm, &res); // Push the result
+            VM_Stack_Push(vm, res); // Push the result
         }
         else
         {
-            FunctionObject* fn = (FunctionObject*)(fnValue.object);
+            FunctionObject* fn = (FunctionObject*)(AS_C_OBJ(fnValue));
 
             // Save execution context, restored on OP_RETURN
             Frame fr = {
@@ -857,7 +861,7 @@ RuntimeValue vm_interp(VM* vm, Program* global)
         int64 memberIndex = VM_Read_Address(vm);
 
         RuntimeValue memberValue = Member_Get(&instance, memberIndex).value;
-        VM_Stack_Push(vm, &memberValue);
+        VM_Stack_Push(vm, memberValue);
 
         DISPATCH();
     }
@@ -884,26 +888,26 @@ uint8_t VM_Peek_Byte(VM* vm){
     return *vm->ip;
 }
 
-void VM_Stack_Push(VM* vm, RuntimeValue* value){
-    if(vm->sp == &vm->stack[512]){
-        VM_Exception("Stack Overflow");
-    }
-    *vm->sp = *value;
+void VM_Stack_Push(VM* vm, RuntimeValue value){
+    // if(vm->sp == &vm->stack[512]){
+    //     VM_Exception("Stack Overflow");
+    // }
+    *vm->sp = value;
     vm->sp++;
 }
 
 RuntimeValue VM_Stack_Pop(VM* vm){
-    if(vm->sp == vm->stack){
-        VM_Exception("Stack Empty");
-    }
+    // if(vm->sp == vm->stack){
+    //     VM_Exception("Stack Empty");
+    // }
     vm->sp--;
     return *vm->sp;
 }
 
 RuntimeValue VM_Stack_Peek(VM* vm, size_t offset){
-    if(vm->sp < vm->stack){
-        VM_Exception("Stack Empty");
-    }
+    // if(vm->sp < vm->stack){
+    //     VM_Exception("Stack Empty");
+    // }
     return *(vm->sp -1 - offset);
 }
 
