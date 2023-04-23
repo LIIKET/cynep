@@ -106,7 +106,6 @@ struct Program {
     int64 globals_size;
 
     FunctionObject** code_objects; // all functions //! Why is this an array of pointers? Fix?
-    size_t code_objects_length;
     FunctionObject* main_fn; // main function
 };
 
@@ -428,8 +427,7 @@ Program* make_program(){
     Program* global = malloc(sizeof(Program));
     global->globals = malloc(sizeof(GlobalVar) * 100); // TODO: DANGER! Handle memory when adding
     global->globals_size = 0;
-
-    global->code_objects_length = 0;
+    global->code_objects = NULL;
 
     return global;
 }

@@ -21,15 +21,17 @@ RuntimeValue Create_CodeObjectValue(char* name, size_t arity, Program* global){
         global->main_fn = co;
     }
 
-    global->code_objects[global->code_objects_length] = co;
-    global->code_objects_length++;
+    array_push(global->code_objects, co);
+    
+    // global->code_objects[global->code_objects_length] = co;
+    // global->code_objects_length++;
 
     return value;
 }
 
 void Compile(AstNode* statement, Program* global){
 
-    global->code_objects= malloc(sizeof(void*) * 100); // TODO: DANGER! Handle memory! Crashes if too many functions
+    //global->code_objects= malloc(sizeof(void*) * 100); // TODO: DANGER! Handle memory! Crashes if too many functions
 
     int64 compile_begin = timestamp();
 
@@ -594,8 +596,7 @@ char* cmpCodeToString(uint8_t cmpcode){
 
 void Disassemble(Program* global){
 
-
-    for (size_t i = 0; i < global->code_objects_length; i++)
+    for (size_t i = 0; i < array_length(global->code_objects); i++)
     {
         FunctionObject* co = global->code_objects[i];
 
