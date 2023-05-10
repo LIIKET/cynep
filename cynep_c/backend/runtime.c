@@ -2,7 +2,6 @@
 
 typedef enum        ValueType ValueType;
 typedef enum        ObjectType ObjectType;
-typedef uint64_t    RuntimeValue;
 typedef struct      VM VM;
 typedef struct      Object Object;
 typedef struct      StringObject StringObject;
@@ -16,6 +15,7 @@ typedef struct      NativeFunctionObject NativeFunctionObject;
 typedef struct      TypeInfoObject TypeInfoObject;
 typedef struct      MemberInfo MemberInfo;
 typedef struct      Frame Frame;
+typedef uint64_t    RuntimeValue;
 
 RuntimeValue    vm_interp(VM* vm, Program* global);
 RuntimeValue    VM_Stack_Peek(VM* vm, size_t offset);
@@ -103,10 +103,8 @@ struct LocalVar {
 
 struct Program {
     GlobalVar* globals; // Array of global variables
-    int64 globals_size;
-
-    FunctionObject** code_objects; // all functions //! Why is this an array of pointers? Fix?
-    FunctionObject* main_fn; // main function
+    FunctionObject** functions; // all functions //! Why is this an array of pointers? Fix?
+    FunctionObject* main_function; // main function
 };
 
 struct Frame {
@@ -122,7 +120,7 @@ struct VM {
     RuntimeValue* sp; // Stack pointer
     RuntimeValue* bp; // Base pointer / Frame pointer
     RuntimeValue stack[512]; // Array of values
-    Frame callStack[512];
+    Frame callstack[512];
     Frame* csp; // call stack pointer
 };
 
@@ -272,7 +270,7 @@ RuntimeValue Alloc_String_Combine(StringObject* one, StringObject* two){
     return result;
 }
 
-RuntimeValue Alloc_Code(char* name, size_t arity){
+RuntimeValue Alloc_Function(char* name, size_t arity){
     RuntimeValue result;
 
 
@@ -284,6 +282,10 @@ RuntimeValue Alloc_Code(char* name, size_t arity){
     co->locals = NULL;
     co->scope_level = 0;
     co->arity = arity;
+
+    arrsetcap(co->code, 1);
+    arrsetcap(co->constants, 1);
+    arrsetcap(co->locals, 1);
 
     result = OBJ_VAL(co);
     
@@ -345,7 +347,7 @@ GlobalVar Global_Get(Program* global, int64 index){
 }
 
 void Global_Set(Program* global, int64 index, RuntimeValue* value){
-    if(index >= global->globals_size){
+    if(index >= array_length(global->globals)){
         printf("\033[0;31mVM Error. Global index %n does not exist.\033[0m\n", index);
         exit(0);
     }
@@ -354,8 +356,8 @@ void Global_Set(Program* global, int64 index, RuntimeValue* value){
 }
 
 int64 Global_GetIndex(Program* global, char* name){
-    if(global->globals_size > 1){
-        for(int64 i = global->globals_size - 1; i >= 0; i--){
+    if(array_length(global->globals) > 1){
+        for(int64 i = array_length(global->globals) - 1; i >= 0; i--){
             if(strcmp(global->globals[i].name, name) == 0){
                 return i;
             }
@@ -389,10 +391,11 @@ void program_define_global(Program* global, char* name)
         return;
     }
 
-    GlobalVar* var = &global->globals[global->globals_size++];
-    var->name = name;
+    GlobalVar var;
+    var.name = name;
+    var.value = NUMBER_VAL(0); // TODO: Set to null
 
-    var->value = NUMBER_VAL(0); // TODO: Set to null
+    array_push(global->globals, var);
 }
 
 void program_add_global(Program* global, char* name, RuntimeValue value)
@@ -401,11 +404,11 @@ void program_add_global(Program* global, char* name, RuntimeValue value)
         return;
     }
 
-    GlobalVar* var = &global->globals[global->globals_size];
-    var->name = name;
-    var->value = value;
+    GlobalVar var;
+    var.name = name;
+    var.value = value;
 
-    global->globals_size++;
+    array_push(global->globals, var);
 }
 
 void program_add_native_function(Program* global, char* name, void* func_ptr, size_t arity)
@@ -416,18 +419,17 @@ void program_add_native_function(Program* global, char* name, void* func_ptr, si
 
     RuntimeValue function = Alloc_NativeFunction(func_ptr, name, arity);
    
-    GlobalVar* var = &global->globals[global->globals_size];
-    var->name = name;
-    var->value = function;
+    GlobalVar var;
+    var.name = name;
+    var.value = function;
 
-    global->globals_size++;
+    array_push(global->globals, var);
 }
 
 Program* make_program(){
     Program* global = malloc(sizeof(Program));
-    global->globals = malloc(sizeof(GlobalVar) * 100); // TODO: DANGER! Handle memory when adding
-    global->globals_size = 0;
-    global->code_objects = NULL;
+    global->globals = NULL;
+    global->functions = NULL;
 
     return global;
 }
@@ -436,13 +438,13 @@ Program* make_program(){
 
 #pragma region LOCALS
 
-int64_t Local_GetIndex(FunctionObject* co, char* name){
+int64_t Local_GetIndex(FunctionObject* func, char* name){
     // We iterate backwards to grab the one with the closest scope level first. (It should be added closer to the end)
-    if(array_length(co->locals) > 0)
+    if(array_length(func->locals) > 0)
     {
-        for(int64_t i = array_length(co->locals) - 1; i >= 0; i--)
+        for(int64_t i = array_length(func->locals) - 1; i >= 0; i--)
         {
-            if(strcmp(name, co->locals[i].name) == 0 )
+            if(strcmp(name, func->locals[i].name) == 0 )
             {
                 return i;
             }
@@ -452,7 +454,7 @@ int64_t Local_GetIndex(FunctionObject* co, char* name){
     return -1;
 }
 
-void Local_Define(FunctionObject* co, char* name){
+void Local_Define(FunctionObject* func, char* name){
 
     // TODO: den här ska hämta med strikt scope
     // int64 index = Local_GetIndex(co, name);
@@ -463,17 +465,17 @@ void Local_Define(FunctionObject* co, char* name){
     // }
 
     LocalVar var;
-    var.scope_level = co->scope_level;
+    var.scope_level = func->scope_level;
     var.name = name;
     var.value = NULL_VAL;
 
-    array_push(co->locals, var);
+    array_push(func->locals, var);
 
     return;
 }
 
-LocalVar Local_Get(FunctionObject* co, int64 index){
-    return co->locals[index];
+LocalVar Local_Get(FunctionObject* func, int64 index){
+    return func->locals[index];
 }
 
 // void Local_Add(CodeObject* co, BufferString* name){
@@ -523,13 +525,13 @@ RuntimeValue vm_exec(VM* vm, Program* global)
 {
     vm->global = global;
     
-    FunctionObject* co = global->main_fn;
+    FunctionObject* co = global->main_function;
     vm->fn = co;
     vm->ip = &co->code[0];
     vm->sp = &vm->stack[0];
     vm->bp = &vm->stack[0];
 
-    vm->csp = vm->callStack;
+    vm->csp = vm->callstack;
 
     return vm_interp(vm, global);
 }
@@ -548,7 +550,7 @@ RuntimeValue vm_interp(VM* vm, Program* global)
     #define DISPATCH()                                   \
     do {                                                 \
         /* Introspect stack for debugging */             \
-        /* VM_DumpStack(vm, opcode);   */                \
+         /*VM_DumpStack(vm, opcode);*/                   \
         goto *dispatch_table[opcode = VM_Read_Byte(vm)]; \
     } while (false)                                      \
 
@@ -895,9 +897,9 @@ void VM_Stack_Push(VM* vm, RuntimeValue value){
 }
 
 RuntimeValue VM_Stack_Pop(VM* vm){
-    // if(vm->sp == vm->stack){
-    //     VM_Exception("Stack Empty");
-    // }
+    if(vm->sp == vm->stack){
+        VM_Exception("Stack Empty");
+    }
     vm->sp--;
     return *vm->sp;
 }

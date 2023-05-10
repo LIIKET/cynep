@@ -87,13 +87,13 @@ DOCUMENTATION
 #define array_length    stbds_arrlen
 #define arrlenu         stbds_arrlenu
 #define array_push      stbds_arrput
-#define array_pop          stbds_arrpop
-#define array_popn          stbds_arrpopn
+#define array_pop       stbds_arrpop
+#define array_popn      stbds_arrpopn
 #define arrfree         stbds_arrfree
 #define arraddnptr      stbds_arraddnptr
 #define arraddnindex    stbds_arraddnindex
 #define arrsetlen       stbds_arrsetlen
-#define array_last         stbds_arrlast
+#define array_last      stbds_arrlast
 #define arrins          stbds_arrins
 #define arrinsn         stbds_arrinsn
 #define arrdel          stbds_arrdel

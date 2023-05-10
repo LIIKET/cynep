@@ -8,14 +8,5 @@ func main(){
 		var a = "Hello" + b; 
     }
 
-    if(100 > 50){
-        var a = "Hello" + " Sailor!"; }
-    if(100 > 50){
-        var a = "Hello" + " Sailor!"; }
-    if(100 > 50){
-        var a = "Hello" + " Sailor!"; }
-    if(100 > 50){
-        var a = "Hello" + " Sailor!"; }
-
 	return i;
 }

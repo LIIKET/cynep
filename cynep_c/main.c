@@ -66,7 +66,7 @@ int main(int argc, char**argv)
 
     size_t asd = sizeof(AstNode);
 
-    TextFile* file = read_entire_file("input.cynep");
+    TextFile* file = read_entire_file("stackoverflow.cynep");
     Token* tokens = lexer_tokenize(file);
     AstNode* program = Build_SyntaxTree(tokens);
 
@@ -77,7 +77,7 @@ int main(int argc, char**argv)
     program_add_native_function(global, "alloc", &Alloc, 1);
 
     // Compile
-    Compile((AstNode*)program, global);
+    compile((AstNode*)program, global);
 
     int64 total_end = timestamp();
     printf("Total: %d ms\n", total_end/1000-total_begin/1000);

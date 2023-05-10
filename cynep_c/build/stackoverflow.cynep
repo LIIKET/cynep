@@ -2,27 +2,28 @@ var i = 0;
 
 func add(arg1, arg2) {
     var result = arg1 + arg2;
-
     return result;
 }
 
 func main(){
 	// This is a one line test comment.
-    var test = add(2,2);
-	var forst = "forst";
+    //var test = add(2,2);
+	//var forst = "forst";
 	var sist = "sist";
 
     while(i < 500000){
-        var test2 = add(2,2);
-        var asd3 = 0;
+		var test1 = 1;
+        var test2 = 1;
+        var test3 = 1;
+        var test4 = 1;
+        var test5 = 1;
+        var tests2 = add(2,2);
+
         i = i + 1;
     }
 
-     var sist2 = 333;
-     var test2 = add(2,2);
+     //var sist2 = 333;
+     
 	
-    return add(2,2);
+    return i;
 }
-
-
-
