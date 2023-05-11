@@ -18,9 +18,6 @@ typedef struct      Frame Frame;
 typedef uint64_t    RuntimeValue;
 
 RuntimeValue    vm_interp(VM* vm, Program* global);
-RuntimeValue    VM_Stack_Peek(VM* vm, size_t offset);
-RuntimeValue    VM_Stack_Pop(VM* vm);
-uint8_t         VM_Read_Byte(VM* vm);
 uint8_t         VM_Peek_Byte(VM* vm);
 uint64_t        VM_Read_Address(VM* vm);
 void            VM_Stack_Push(VM* vm, RuntimeValue value);
@@ -530,15 +527,23 @@ RuntimeValue vm_exec(VM* vm, Program* global)
     vm->ip = &co->code[0];
     vm->sp = &vm->stack[0];
     vm->bp = &vm->stack[0];
-
     vm->csp = vm->callstack;
 
     return vm_interp(vm, global);
 }
 
-RuntimeValue vm_interp(VM* vm, Program* global)
+RuntimeValue vm_interp(register VM* vm, Program* global)
 {
     int64 t1 = timestamp();
+
+    register uint8_t* ip = vm->ip;
+    register RuntimeValue* sp = vm->sp;
+
+    #define POP() (*(--sp))
+    #define READ_BYTE() (*ip++)
+    #define PEEK() (*(sp - 1))
+    #define PUSH(value) (*sp++ = value)
+    #define READ_ADDRESS(out) (*(uint64_t*)memcpy(&out, ip, sizeof(uint64_t))); ip += 8
 
     static void* dispatch_table[] = {
     &&DO_OP_HALT, &&DO_OP_CONST, &&DO_OP_ADD, &&DO_OP_SUB,
@@ -551,15 +556,15 @@ RuntimeValue vm_interp(VM* vm, Program* global)
     do {                                                 \
         /* Introspect stack for debugging */             \
          /*VM_DumpStack(vm, opcode);*/                   \
-        goto *dispatch_table[opcode = VM_Read_Byte(vm)]; \
+        goto *dispatch_table[opcode = READ_BYTE()]; \
     } while (false)                                      \
 
     #define BINARY_OP(operation)                         \
     do {                                                 \
-        double op2 = AS_C_DOUBLE(VM_Stack_Pop(vm));      \
-        double op1 = AS_C_DOUBLE(VM_Stack_Pop(vm));      \
+        double op2 = AS_C_DOUBLE(POP());                 \
+        double op1 = AS_C_DOUBLE(POP());                 \
         double result = op1 operation op2;               \
-        VM_Stack_Push(vm, NUMBER_VAL(result));           \
+        PUSH(NUMBER_VAL(result));                        \
     } while (false)                                      \
 
     DISPATCH();
@@ -567,27 +572,27 @@ RuntimeValue vm_interp(VM* vm, Program* global)
     DO_OP_HALT: {
         int64 t2 = timestamp();
         printf("Execution time: %d ms\n", t2/1000-t1/1000);
-        return VM_Stack_Pop(vm);
+        return POP();
     }
 
     DO_OP_CONST: {
-        uint64_t constIndex = VM_Read_Address(vm);
+        uint64_t constIndex = READ_ADDRESS(constIndex);
         RuntimeValue constant = vm->fn->constants[constIndex];
-        VM_Stack_Push(vm, constant);
+        PUSH(constant);
 
         DISPATCH();
     }
 
     DO_OP_ADD: {
-        RuntimeValue op2 = VM_Stack_Pop(vm);
-        RuntimeValue op1 = VM_Stack_Pop(vm);
+        RuntimeValue op2 = POP();
+        RuntimeValue op1 = POP();
 
         if(IS_NUMBER(op1) && IS_NUMBER(op2))
         {
             double result = AS_C_DOUBLE(op1) + AS_C_DOUBLE(op2);
             RuntimeValue runtime_result = NUMBER_VAL(result);
 
-            VM_Stack_Push(vm, runtime_result);
+            PUSH(runtime_result);
 
             DISPATCH();
         }
@@ -598,7 +603,7 @@ RuntimeValue vm_interp(VM* vm, Program* global)
             StringObject str2 = AS_STRING(op2);
             RuntimeValue value = Alloc_String_Combine(&str1, &str2);
 
-            VM_Stack_Push(vm, value);
+            PUSH(value);
 
             DISPATCH();
         }
@@ -622,10 +627,10 @@ RuntimeValue vm_interp(VM* vm, Program* global)
     }
 
     DO_OP_CMP: {
-        uint8_t cmp_type = VM_Read_Byte(vm);
+        uint8_t cmp_type = READ_BYTE();
 
-        RuntimeValue op2 = VM_Stack_Pop(vm);
-        RuntimeValue op1 = VM_Stack_Pop(vm);
+        RuntimeValue op2 = POP();
+        RuntimeValue op1 = POP();
         bool res;
 
         if(IS_NUMBER(op2) && IS_NUMBER(op1))
@@ -706,72 +711,72 @@ RuntimeValue vm_interp(VM* vm, Program* global)
         }
 
         RuntimeValue runtime_result = BOOL_VAL(res);
-        VM_Stack_Push(vm, runtime_result);
+        PUSH(runtime_result);
 
         DISPATCH();
     }
 
     DO_OP_JMP_IF_FALSE: {
-        bool condition = AS_C_BOOL(VM_Stack_Pop(vm));
-        uint64_t address = VM_Read_Address(vm);
+        bool condition = AS_C_BOOL(POP());
+        uint64_t address = READ_ADDRESS(address);
 
         if(!condition){
-            vm->ip = &vm->fn->code[address];
+            ip = &vm->fn->code[address];
         }
     
         DISPATCH();
     }
 
     DO_OP_JMP: {
-        uint64_t address = VM_Read_Address(vm);
-        vm->ip = &vm->fn->code[address];
+        uint64_t address = READ_ADDRESS(address);
+        ip = &vm->fn->code[address];
 
         DISPATCH();
     }
 
     DO_OP_POP: {
-        VM_Stack_Pop(vm);
+        POP();
 
         DISPATCH();
     }
 
     DO_OP_GET_GLOBAL: {
-        int64 address = VM_Read_Address(vm);
+        int64 address = READ_ADDRESS(address);
         RuntimeValue value = Global_Get(global, address).value;
-        VM_Stack_Push(vm, value);
+        PUSH(value);
 
         DISPATCH();
     }
 
     DO_OP_SET_GLOBAL: {
-        int64 index = VM_Read_Address(vm);
-        RuntimeValue value = VM_Stack_Peek(vm, 0);
+        int64 index = READ_ADDRESS(index);
+        RuntimeValue value = PEEK();
         Global_Set(global, index, &value);
 
         DISPATCH();
     }
 
     DO_OP_GET_LOCAL: {
-        uint64 address = VM_Read_Address(vm);
-        if(address < 0 ){ 
-            VM_Exception("Invalid variable index.");
-        }
+        uint64 address = READ_ADDRESS(address);
+        // if(address < 0 ){ 
+        //     VM_Exception("Invalid variable index.");
+        // }
 
-        VM_Stack_Push(vm, vm->bp[address]);
+        PUSH(vm->bp[address]);
 
         DISPATCH();
     }
 
     DO_OP_SET_LOCAL: {
-        int64 index = VM_Read_Address(vm);
-        RuntimeValue value = VM_Stack_Peek(vm, 0);
+        int64 index = READ_ADDRESS(index);
+        RuntimeValue value = PEEK();
         vm->bp[index] = value;
 
         DISPATCH();
     }
 
     DO_OP_SCOPE_EXIT: {
-        uint64 count = VM_Read_Address(vm);
+        uint64 count = READ_ADDRESS(count);
 
         if(count > 0)
         {
@@ -781,15 +786,16 @@ RuntimeValue vm_interp(VM* vm, Program* global)
             //*(vm->sp - count) = VM_Stack_Peek(vm, 0);
 
             // Pop back to before scope
-            vm->sp -= (count); //  - 1
+            sp -= (count); //  - 1
         }
 
         DISPATCH();
     }
 
     DO_OP_CALL: {
-        uint64_t arg_count = VM_Read_Address(vm);
-        RuntimeValue fnValue = VM_Stack_Pop(vm);
+        uint64_t arg_count = READ_ADDRESS(arg_count);
+        RuntimeValue fnValue = POP();
+
 
         if(IS_OBJ(fnValue) && AS_C_OBJ(fnValue)->objectType == ObjectType_NativeFunction){
             NativeFunctionObject fn = AS_NATIVE_FUNCTION(fnValue);
@@ -798,13 +804,13 @@ RuntimeValue vm_interp(VM* vm, Program* global)
 
             for (size_t i = 0; i < arg_count; i++)
             {
-                args[i] = VM_Stack_Pop(vm);
+                args[i] = POP();
             }
 
             RuntimeValue (*fun_ptr)() = fn.func_ptr; // Function pointer
             RuntimeValue res = (*fun_ptr)(arg_count, &args); // Invoke
             
-            VM_Stack_Push(vm, res); // Push the result
+            PUSH(res); // Push the result
         }
         else
         {
@@ -814,7 +820,7 @@ RuntimeValue vm_interp(VM* vm, Program* global)
             Frame fr = {
                 .bp = vm->bp,
                 .fn = vm->fn,
-                .ra = vm->ip
+                .ra = ip
             };
             *vm->csp = fr;
             vm->csp++;
@@ -823,32 +829,32 @@ RuntimeValue vm_interp(VM* vm, Program* global)
             vm->fn = fn;
 
             // set base pointer (frame) to the call
-            vm->bp = vm->sp - arg_count;
+            vm->bp = sp - arg_count;
 
             // Jump to the function code
-            vm->ip = &fn->code[0];
+            ip = &fn->code[0];
         }
 
         DISPATCH();
     }
 
     DO_OP_RETURN: {
-        uint64 count = VM_Read_Address(vm);
+        uint64 count = READ_ADDRESS(count);
 
         if(count > 0)
         {
             // Move the result above the vars that is getting popped
             // TODO: Borde bara vara så här för ett block som returerar
 
-            *(vm->sp - count) = VM_Stack_Peek(vm, 0);
+            *(sp - count) = PEEK();
 
             // Pop back to before scope
-            vm->sp -= (count - 1); //  
+            sp -= (count - 1); //  
         }
 
         // Restore frame
         vm->csp--;
-        vm->ip = vm->csp->ra;
+        ip = vm->csp->ra;
         vm->bp = vm->csp->bp;
         vm->fn = vm->csp->fn;
 
@@ -856,12 +862,12 @@ RuntimeValue vm_interp(VM* vm, Program* global)
     }
 
     DO_OP_GET_MEMBER: {
-        RuntimeValue instanceVal = VM_Stack_Pop(vm);
+        RuntimeValue instanceVal = POP();
         TypeInstanceObject instance = AS_TYPEINSTANCE(instanceVal);
-        int64 memberIndex = VM_Read_Address(vm);
+        int64 memberIndex = READ_ADDRESS(memberIndex);
 
         RuntimeValue memberValue = Member_Get(&instance, memberIndex).value;
-        VM_Stack_Push(vm, memberValue);
+        PUSH(memberValue);
 
         DISPATCH();
     }
@@ -871,45 +877,6 @@ RuntimeValue vm_interp(VM* vm, Program* global)
 
 #pragma region VIRTUAL_MACHINE_HELPER
 
-// Reads 64 bit address.
-uint64_t VM_Read_Address(VM* vm){ 
-    uint64_t result;
-    memcpy(&result, vm->ip, sizeof(uint64_t));
-    vm->ip += 8;
-
-    return result;
-}
-
-uint8_t VM_Read_Byte(VM* vm){
-    return *vm->ip++;
-}
-
-uint8_t VM_Peek_Byte(VM* vm){
-    return *vm->ip;
-}
-
-void VM_Stack_Push(VM* vm, RuntimeValue value){
-    // if(vm->sp == &vm->stack[512]){
-    //     VM_Exception("Stack Overflow");
-    // }
-    *vm->sp = value;
-    vm->sp++;
-}
-
-RuntimeValue VM_Stack_Pop(VM* vm){
-    if(vm->sp == vm->stack){
-        VM_Exception("Stack Empty");
-    }
-    vm->sp--;
-    return *vm->sp;
-}
-
-RuntimeValue VM_Stack_Peek(VM* vm, size_t offset){
-    // if(vm->sp < vm->stack){
-    //     VM_Exception("Stack Empty");
-    // }
-    return *(vm->sp -1 - offset);
-}
 
 void VM_Exception(char* msg){
     printf("\033[0;31mVM: %s \033[0m\n", msg);

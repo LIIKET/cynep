@@ -9,9 +9,9 @@ func main(){
 	// This is a one line test comment.
     //var test = add(2,2);
 	//var forst = "forst";
-	var sist = "sist";
+	//var sist = "sist";
 
-    while(i < 500000){
+    while(i < 5000000){
 		var test1 = 1;
         var test2 = 1;
         var test3 = 1;

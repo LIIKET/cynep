@@ -105,7 +105,7 @@ void *parseTask(void *vargp)
 
 void startThread(){
     pthread_t thread1;
-    pthread_create(&thread1, NULL, parseTask, (void *)"input.cynep");
+    pthread_create(&thread1, NULL, parseTask, (void *)"stackoverflow.cynep");
     pthread_join(thread1, NULL);
 }
 
